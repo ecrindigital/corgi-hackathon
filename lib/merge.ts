@@ -160,6 +160,19 @@ export async function createMagicLink(registeredUserId: string, connector: strin
   return { url: url as string, expiresAt: (json.expires_at as string | undefined) ?? null };
 }
 
+export async function disconnectConnector(registeredUserId: string, connector: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/credentials/registered-users/${registeredUserId}/connectors/${connector}/`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${API_KEY()}` },
+      cache: "no-store",
+    },
+  );
+  if (!res.ok)
+    throw new Error(`${res.status} ${res.statusText} — ${(await res.text()).slice(0, 300)}`);
+}
+
 // ---------------------------------------------------------------- MCP client
 
 export async function withMcp<T>(registeredUserId: string, fn: (client: Client) => Promise<T>): Promise<T> {

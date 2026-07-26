@@ -61,6 +61,7 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>("welcome");
   const [status, setStatus] = useState<Status | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [range, setRange] = useState<TimeRange>("week");
@@ -160,6 +161,28 @@ export default function Home() {
       } catch (err) {
         setError((err as Error).message);
         setConnecting(null);
+      }
+    },
+    [loadStatus],
+  );
+
+  const disconnect = useCallback(
+    async (slug: string) => {
+      setDisconnecting(slug);
+      setError(null);
+      try {
+        const res = await fetch("/api/connect", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ connector: slug }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? res.statusText);
+        await loadStatus();
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setDisconnecting(null);
       }
     },
     [loadStatus],
@@ -461,9 +484,23 @@ export default function Home() {
                       )}
                     </div>
 
-                    {c.connected ? (
+                    {c.connected && c.inPack ? (
                       // Mounts the moment polling sees the credential land. The
                       // pop is the only confirmation the popup ever gives you.
+                      <div className="pop flex shrink-0 flex-col items-end gap-2">
+                        <span className="flex items-center gap-2 text-sm text-card">
+                          <span className="size-2 rounded-full bg-card" aria-hidden />
+                          {c.toolCount} tools
+                        </span>
+                        <button
+                          onClick={() => disconnect(c.slug)}
+                          disabled={disconnecting === c.slug}
+                          className="btn btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
+                        >
+                          {disconnecting === c.slug ? "Disconnecting…" : "Disconnect"}
+                        </button>
+                      </div>
+                    ) : c.connected ? (
                       <span className="pop flex shrink-0 items-center gap-2 text-sm text-card">
                         <span className="size-2 rounded-full bg-card" aria-hidden />
                         {c.toolCount} tools
