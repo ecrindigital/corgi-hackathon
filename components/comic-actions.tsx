@@ -49,7 +49,7 @@ export function ComicActions({ dataUrl, filename }: { dataUrl: string; filename:
         await navigator.share({
           files: [file],
           title: "My week as a comic",
-          text: "My week, drawn by Corgi.",
+          text: "My week, drawn by Toonback.",
         });
         setState("idle");
         return;
@@ -67,7 +67,7 @@ export function ComicActions({ dataUrl, filename }: { dataUrl: string; filename:
 
   return (
     <>
-      <a href={dataUrl} download={filename} className="btn btn-primary btn-primary-hover px-6 py-3">
+      <a href={dataUrl} download={filename} className="btn btn-primary px-6 py-3">
         Save the page
       </a>
 

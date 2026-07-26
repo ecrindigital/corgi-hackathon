@@ -1,37 +1,40 @@
 @import "tailwindcss";
 
 /*
- * F37 Bolton is a licensed face and is not bundled. Drop the file at
- * public/fonts/f37-bolton.woff2 and it takes over automatically; until then the
- * stack falls through to Inter Tight, the closest free grotesque in width and
- * tracking. Nothing breaks either way.
+ * ABC Favorit is a licensed Dinamo face and is not bundled. Drop the files at
+ * public/fonts/abc-favorit{,-black}.woff2 and they take over automatically;
+ * until then the stack falls through to Archivo, the closest free grotesque
+ * with a real Black weight. Nothing breaks either way.
  */
 @font-face {
-  font-family: "F37 Bolton";
-  src: url("/fonts/f37-bolton.woff2") format("woff2");
+  font-family: "ABC Favorit";
+  src: url("/fonts/abc-favorit.woff2") format("woff2");
   font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "ABC Favorit";
+  src: url("/fonts/abc-favorit-black.woff2") format("woff2");
+  font-weight: 800 900;
   font-display: swap;
 }
 
 @theme {
-  --color-ink: #191919;
-  --color-body: #4a4a4a;
-  --color-primary: #ff5c00;
-  --color-line: #e1e1e1;
-  --color-surface: #ffffff;
-  --color-subtle: #fafafa;
+  --color-page: #f6f1e4;
+  --color-card: #fffdf7;
+  --color-fg: #191919;
+  --color-orange: #ff5c00;
+  --color-yellow: #ffc900;
+  --color-blue: #90a8ed;
 
-  --font-display: "F37 Bolton", var(--font-display-fallback), sans-serif;
-  --font-body: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "ABC Favorit", var(--font-fallback), ui-sans-serif, system-ui, sans-serif;
+  --tracking-tight: -0.025em;
+}
 
-  --tracking-title: -0.032rem;
-  --tracking-body: -0.015em;
-
-  /* Entering or exiting the screen. */
-  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
-  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
-  /* Something already on screen moving to a new place. */
-  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+@theme inline {
+  /* On cream, neobrutalism wants a hard black rule, not a translucent hairline. */
+  --color-edge: var(--color-fg);
+  --color-muted: color-mix(in oklab, var(--color-fg) 68%, transparent);
 }
 
 html {
@@ -39,19 +42,19 @@ html {
 }
 
 body {
-  background: var(--color-surface);
-  color: var(--color-body);
-  font-family: var(--font-body);
-  letter-spacing: var(--tracking-body);
+  background: var(--color-page);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
 }
 
 h1,
 h2,
 h3,
 h4 {
-  color: var(--color-ink);
-  font-family: var(--font-display);
-  letter-spacing: var(--tracking-title);
+  font-weight: 900;
+  letter-spacing: var(--tracking-tight);
 }
 
 button:not(:disabled),
@@ -67,64 +70,69 @@ button:disabled {
 
 /* ---------------------------------------------------------------- surfaces */
 
-/* One hairline, one radius, one surface: every card in the product is this. */
 @utility card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: 12px;
+  background: var(--color-card);
+  border: 2px solid var(--color-fg);
+  border-radius: 0.25rem;
 }
 
-/* Lift only where a pointer can actually hover; touch fakes it on tap. */
-@utility card-interactive {
-  transition:
-    border-color 150ms ease,
-    transform 150ms ease;
-  @media (hover: hover) and (pointer: fine) {
-    &:hover {
-      border-color: var(--color-ink);
-      transform: translateY(-1px);
-    }
-  }
+@utility chip {
+  background: var(--color-card);
+  border: 2px solid var(--color-fg);
+  border-radius: 0.25rem;
+}
+
+/* A card that sits proud of the page, for the ones you can act on. */
+@utility card-raised {
+  box-shadow: 4px 4px 0 var(--color-fg);
 }
 
 /* ----------------------------------------------------------------- buttons */
 
+/*
+ * The neobrutalist stack: flat at rest, and on hover two hard offset layers
+ * slide out from under the face. Built with box-shadow rather than pseudo
+ * elements so it cannot be clipped by a card's stacking context, and paired
+ * with a transform so the button lifts into its own shadow.
+ */
 @utility btn {
-  border-radius: 12px;
-  font-family: var(--font-display);
-  letter-spacing: var(--tracking-title);
+  position: relative;
+  border-radius: 0.25rem;
+  border: 2px solid var(--color-fg);
+  font-weight: 900;
+  letter-spacing: var(--tracking-tight);
   transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    opacity 150ms ease,
-    transform 100ms ease;
+    box-shadow 0.15s ease,
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 
-  /* The cheapest way to make a button feel physical. */
+  &:hover:not(:disabled) {
+    transform: translate(-2px, -2px);
+    box-shadow:
+      4px 4px 0 var(--color-yellow),
+      4px 4px 0 1px var(--color-fg),
+      8px 8px 0 var(--color-blue),
+      8px 8px 0 1px var(--color-fg);
+  }
+
   &:active:not(:disabled) {
-    transform: scale(0.97);
+    transform: translate(1px, 1px);
+    box-shadow:
+      2px 2px 0 var(--color-yellow),
+      2px 2px 0 1px var(--color-fg);
   }
 }
 
 @utility btn-primary {
-  background: var(--color-primary);
-  color: var(--color-surface);
-  border: 1px solid var(--color-primary);
-}
-@utility btn-primary-hover {
-  &:hover:not(:disabled) {
-    background: #e65200;
-    border-color: #e65200;
-  }
+  background: var(--color-orange);
+  color: var(--color-card);
 }
 
 @utility btn-secondary {
-  background: var(--color-surface);
-  color: var(--color-ink);
-  border: 1px solid var(--color-line);
-  &:hover:not(:disabled) {
-    border-color: var(--color-ink);
-  }
+  background: var(--color-card);
+  color: var(--color-fg);
 }
 
 /* -------------------------------------------------------------- animations */
@@ -173,39 +181,24 @@ button:disabled {
   }
 }
 
-/* Sweeps once across a panel as it fills, so "working" reads as motion. */
-@keyframes sweep {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(200%);
-  }
-}
-
 @utility rise {
-  animation: rise 280ms var(--ease-out-cubic) both;
+  animation: rise 280ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
 @utility pop {
-  animation: pop 200ms var(--ease-out-cubic) both;
+  animation: pop 200ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
 @utility reveal {
-  animation: reveal 420ms var(--ease-out-quart) both;
+  animation: reveal 420ms cubic-bezier(0.165, 0.84, 0.44, 1) both;
 }
 
 @utility breathe {
   animation: breathe 1800ms ease-in-out infinite;
 }
 
-@utility sweep {
-  animation: sweep 1600ms var(--ease-in-out-cubic) infinite;
-  will-change: transform;
-}
-
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 3px solid var(--color-orange);
   outline-offset: 2px;
 }
 

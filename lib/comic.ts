@@ -116,7 +116,11 @@ function castInstructions(cast: Cast[]): string {
 }
 
 /** Ask the story model for one image prompt built from the real data. */
-export async function writeComicBrief(cast: Cast[], rangeLabel: string): Promise<string> {
+export async function writeComicBrief(
+  cast: Cast[],
+  rangeLabel: string,
+  model: string = STORY_MODEL,
+): Promise<string> {
   const key = process.env.MERGE_GATEWAY_API_KEY;
   if (!key) throw new Error("missing env: MERGE_GATEWAY_API_KEY");
 
@@ -129,7 +133,7 @@ export async function writeComicBrief(cast: Cast[], rangeLabel: string): Promise
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: STORY_MODEL,
+      model,
       max_tokens: 2000,
       messages: [
         { role: "system", content: STORY_SYSTEM },

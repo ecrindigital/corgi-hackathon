@@ -63,18 +63,18 @@ export function FaceUpload({ onChange }: { onChange?: (hasFace: boolean) => void
   return (
     <div>
       <div className="flex items-center gap-4">
-        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-full border border-line bg-subtle">
+        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-full border border-edge bg-page">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element -- local data: URL
             <img src={preview} alt="Your reference photo" className="pop size-full object-cover" />
           ) : (
-            <span className="text-lg text-body/50">☺</span>
+            <span className="text-lg text-muted">☺</span>
           )}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="font-[family-name:var(--font-display)] text-ink">Your face</p>
-          <p className="text-sm text-body">
+          <p className="font-black text-fg">Your face</p>
+          <p className="text-sm text-muted">
             {preview
               ? "The character will be drawn from this photo."
               : "Optional. Without it, the model invents someone."}
@@ -104,7 +104,7 @@ export function FaceUpload({ onChange }: { onChange?: (hasFace: boolean) => void
         onChange={(e) => pick(e.target.files?.[0])}
       />
 
-      {error && <p className="mt-3 text-sm text-primary">{error}</p>}
+      {error && <p className="mt-3 text-sm text-orange">{error}</p>}
     </div>
   );
 }

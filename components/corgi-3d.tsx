@@ -20,7 +20,7 @@ const FUR = 0xe0a06a;
 const FUR_DARK = 0xc9884f;
 const CREAM = 0xfff6ec;
 const INK = 0x191919;
-const PRIMARY = 0xff5c00;
+const ORANGE = 0xff5c00;
 
 /** How far the head is allowed to turn, in radians. */
 const MAX_YAW = 0.62;
@@ -173,7 +173,7 @@ export function Corgi3D({ className = "" }: { className?: string }) {
     scene.add(key);
 
     // A dim rim in the brand colour, so the model belongs to the palette.
-    const rim = new THREE.DirectionalLight(PRIMARY, 0.7);
+    const rim = new THREE.DirectionalLight(ORANGE, 0.75);
     rim.position.set(-5, 2, -4);
     scene.add(rim);
 
