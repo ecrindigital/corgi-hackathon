@@ -503,9 +503,9 @@ export default function Home() {
         <div className="rise" style={delay(0)}>
           <Eyebrow>Ready</Eyebrow>
           <h1 className="mt-3 text-3xl sm:text-4xl">
-            {ready.length > 1 ? "Two of you. One comic." : "That's everything we need."}
+            {ready.length > 1 ? "Two of you. One comic." : "Let’s turn this into a comic."}
           </h1>
-          <p className="mt-3">Reading {connected.map((c) => c.label).join(", ")}.</p>
+          <p className="mt-3">Currently reading {connected.map((c) => c.label).join(", ")}.</p>
         </div>
 
         <div className="card rise mt-8 p-5" style={delay(1)}>
