@@ -24,14 +24,15 @@ To make a comic with someone else, send them the room invitation link shown duri
 
 [Merge Agent Handler](https://www.merge.dev/merge-agent-handler) connects Toonback to the services that contain the user's story:
 
-- Google Calendar and Outlook for plans and events
 - Gmail for conversations and life updates
+- Google Calendar for plans and events
+- Google Drive for files and documents
 - Spotify for music and mood
-- Oura and WHOOP for sleep and activity
-- Notion and Google Tasks for thoughts and plans
-- GitHub, Canva, and Figma for projects and creative work
+- X for posts and activity
 
 Users authorize each service they want to include. Merge handles authentication, credentials, token refresh, and tool access through a single integration.
+
+On local macOS development, Toonback can also read iMessage directly with the user's permission. Users may add text or files as context without connecting another service.
 
 Toonback gives its context agent a curated set of read-only tools from the connected services. The agent collects relevant moments from the chosen chapter of your life, removes sensitive details, and sends the resulting context and character photo to the comic-generation model.
 

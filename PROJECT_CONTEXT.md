@@ -31,7 +31,7 @@ Living notes for the team. Update this file as decisions change.
 - Never silently mix fixture or invented data into a real user's comic. Seeded data exists only in an explicitly identified demo mode.
 - Product promise: **Your life, drawn.** Supporting line: **Connect your digital life and turn it into a comic that is unmistakably yours.**
 - Merge is the primary sponsor integration. The product should be able to use multiple personal connectors rather than being designed around one provider.
-- Offer all useful personal Connectors supported by Merge rather than choosing a three-Connector demo product. The user may authenticate any subset.
+- The configured Merge Tool Pack exposes Gmail, Google Calendar, Google Drive, Spotify, and X. The user may authenticate any subset.
 - Each third-party Connector requires separate user authentication. Merge centralizes the UI, credential storage, token refresh, and tool access, but it cannot bypass provider consent.
 - Use Vercel AI SDK because it simplifies MCP and model integration.
 - Deploy on Vercel. The existing VPS is not part of the initial architecture.
@@ -42,8 +42,8 @@ Living notes for the team. Update this file as decisions change.
 
 - Next.js App Router, TypeScript, Bun, and Tailwind
 - One deployable application with one comic-generation endpoint
-- Merge Agent Handler + embedded Merge Link
-- All useful personal Connectors in onboarding; a curated read-only Tool Pack at generation time
+- Merge Agent Handler + Magic Links
+- Gmail, Google Calendar, Google Drive, Spotify, and X in onboarding; curated read-only tools at generation time
 - Generate from any authenticated subset; additional sources improve the result
 - Vercel AI SDK, with the final image model selected by a quick output-quality spike
 - Vercel deployment
@@ -125,29 +125,24 @@ Merge has two relevant product surfaces:
 - **Unified API:** primarily enterprise categories such as HRIS, ATS, accounting, ticketing, CRM, file storage, knowledge base, and chat.
 - **Agent Handler:** 123+ MCP-ready connectors across personal and business services. This is the more relevant product for this idea.
 
-Useful Agent Handler connectors:
+Connectors configured for this project:
 
 | Source | What it contributes |
 | --- | --- |
 | Gmail | Conversations, invitations, travel confirmations, purchases, attachments, and unexpected life events |
 | Google Calendar | Timeline, event names, locations, attendees, and descriptions |
 | Spotify | Recently played music, top tracks/artists, mood, and a soundtrack |
-| Oura / WHOOP | Sleep, workouts, activity, stress, readiness, and comedic contrast |
-| Outlook | Email and calendar |
-| Google Drive / Dropbox / OneDrive / Box | Personal files and any photos stored there |
-| Google Meet / Zoom / Plaud / Fireflies | Conversations and transcripts |
-| TikTok / X / YouTube / LinkedIn | Social and media activity, depending on each connector's available tools |
-| Google Tasks / Notion / Canva / PayPal | Additional personal signals |
+| Google Drive | Personal files and documents |
+| X | Posts and activity |
 
 Important limitations and implementation notes:
 
 - Merge Agent Handler currently has no direct Google Photos or Apple Photos connector.
 - Google Photos could be added separately with Google's Picker API, which lets the user explicitly select photos. It does not provide automatic access to the user's entire library.
 - Apple provides PhotoKit access to Photos/iCloud Photos through native Apple-platform apps, not a comparable server-side web connector. For this web hackathon app, the practical Apple Photos flow is the normal file/photo picker so the user manually selects an image.
-- No direct iMessage or WhatsApp history connector has been identified.
-- The user must authenticate each Connector separately through Merge Link or Magic Link. This includes separate Gmail, Google Calendar, and Google Drive Connector credentials even when the same Google account is used.
+- iMessage is read directly from the local macOS Messages database during local development; it is not a Merge connector and is unavailable in the Vercel deployment.
+- The user must authenticate each Connector separately through a Magic Link. This includes separate Gmail, Google Calendar, and Google Drive credentials even when the same Google account is used.
 - Merge stores the resulting credential against the user's Merge Registered User and handles subsequent authenticated calls and token refreshes.
-- Merge Link can show all configured Connectors in one picker, but selecting one still starts that provider's individual authentication flow.
 - Authentication can also happen on demand when an agent first calls an unconnected tool, but that would interrupt the one-click comic experience.
 - Gmail, Google Calendar, and Google Drive are separate connectors and require separate configuration/authentication even though Merge handles their connection infrastructure.
 - The app must still call each source, handle missing data, and convert different responses into a shared format.
@@ -159,36 +154,28 @@ Research:
 - [Gmail connector](https://docs.merge.dev/merge-agent-handler/connectors/gmail)
 - [Google Calendar connector](https://docs.merge.dev/merge-agent-handler/connectors/google-calendar)
 - [Spotify connector](https://docs.merge.dev/merge-agent-handler/connectors/spotify)
-- [Oura connector](https://docs.merge.dev/merge-agent-handler/connectors/oura)
-- [Outlook connector](https://docs.merge.dev/merge-agent-handler/connectors/outlook)
 - [Agent Handler application credentials](https://docs.merge.dev/merge-agent-handler/administer/application-credentials)
 
 ## Current integration direction
 
-Merge is the primary sponsor integration. Offer all useful personal connectors, let the user authenticate any subset, and give the context agent only the read-only tools relevant to the authenticated sources. "All personal Connectors" means all useful choices are available in onboarding; it does not mean the user must connect all of them or that every available tool is sent to the model.
-
-Recommended connector groups:
+Merge is the primary sponsor integration. Let the user authenticate any subset of the five configured connectors, and give the context agent only the read-only tools relevant to the authenticated sources.
 
 | Signal | Connectors |
 | --- | --- |
-| Plans and events | Google Calendar, Outlook, Calendly |
-| Conversations | Gmail, Outlook, Google Meet, Zoom, Plaud, Fireflies |
+| Plans and events | Google Calendar |
+| Conversations | Gmail |
 | Mood and taste | Spotify |
-| Body and energy | Oura, WHOOP |
-| Thoughts and intentions | Notion, Google Tasks, OneNote, Google Docs |
-| Projects and creative work | GitHub, Canva, Figma |
-| Files and possible memories | Google Drive, Dropbox, OneDrive, Box |
-| Public/social activity | X, TikTok, YouTube, LinkedIn |
-| Spending and travel signals | PayPal, TripAdvisor |
+| Files and documents | Google Drive |
+| Public/social activity | X |
 
-Not every connector exposes equally useful personal history. Some are oriented toward business operations, writes, or public content. Only expose a small set of safe read tools from each connector.
+The app can additionally use local iMessage data on macOS and context that the user adds directly. Only expose a small set of safe read tools from each Merge connector.
 
-Important missing sources include direct iMessage/SMS, WhatsApp, Instagram DMs, Google Photos, Apple Photos/iCloud, Apple Health, and reliable location history.
+Important missing sources in the deployed app include iMessage/SMS, WhatsApp, Instagram DMs, Google Photos, Apple Photos/iCloud, Apple Health, and reliable location history.
 
 Potential data flow:
 
 ```text
-Any authenticated personal connectors
+Any authenticated configured connectors
                         |
                         v
                context agent
@@ -214,7 +201,7 @@ Photon is currently optional. It should not delay the core comic-generation loop
 
 Core demo:
 
-- Connect any available personal sources through Merge
+- Connect any of the five configured sources through Merge
 - Let the user choose the chapter of their life: last week, last month, or lifetime
 - Upload one clear full-body character-reference photo
 - Generate one coherent comic image
@@ -294,7 +281,7 @@ Build one full-stack TypeScript application:
 | Package manager | Bun |
 | Styling | Tailwind CSS from the default Next.js setup |
 | Backend | Next.js Route Handlers in the same app |
-| Merge authentication UI | `@mergeapi/react-agent-handler-link` |
+| Merge authentication | Agent Handler Magic Links |
 | Merge tools | AI SDK MCP client connected to Agent Handler |
 | AI integration | Vercel AI SDK |
 | Context model | Best suitable model available through existing accounts or the $20 Merge Gateway credit |
@@ -334,7 +321,7 @@ Resize/compress the selfie in the browser. Prefer returning a model-hosted image
 - Keep generated images in browser memory by default. Upload only the finished comic to public Vercel Blob when the user explicitly creates a share link.
 - Use a randomized Blob pathname and disclose that anyone with the link can view the shared comic.
 - No job queue: run one generation request with a visible progress state.
-- One Tool Pack containing a small read-only tool subset from each useful personal connector.
+- One Tool Pack containing a small read-only tool subset for Gmail, Google Calendar, Google Drive, Spotify, and X.
 - Let the image model decide the comic's story, panel count, layout, and dialogue.
 - Return the model's finished comic image without reconstructing it in the app.
 - Keep one context fixture and known-good comic for development and demo fallback.
