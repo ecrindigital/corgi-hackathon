@@ -15,7 +15,7 @@ const RANGE_LABEL: Record<TimeRange, string> = {
 /**
  * The whole loop behind one button.
  *
- * Drawing alone takes over two minutes, so this streams NDJSON progress events
+ * Drawing still dominates the wall clock, so this streams NDJSON progress events
  * rather than leaving the browser on a blank spinner. Each line is one JSON
  * object; the last one carries the finished comic.
  */
@@ -96,8 +96,8 @@ export async function POST(request: Request) {
         send({
           step: "draw",
           message: faces.length
-            ? "Inking the page, with your face in it. This is the slow part, about two minutes."
-            : "Inking the page. This is the slow part, about two minutes.",
+            ? "Inking the page, with your face in it. About half a minute."
+            : "Inking the page. About half a minute.",
         });
         const drawn = await drawComic(brief, faces);
 

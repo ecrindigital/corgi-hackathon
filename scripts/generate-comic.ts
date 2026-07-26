@@ -45,7 +45,7 @@ const main = async () => {
     process.exit(1);
   }
 
-  const model = arg("model") || "openai/gpt-image-2";
+  const model = arg("model") || process.env.IMAGE_MODEL || "google/gemini-3-pro-image";
   const prompt = arg("prompt") || DEFAULT_PROMPT;
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const out = arg("out") || `./output/comic-${stamp}.png`;

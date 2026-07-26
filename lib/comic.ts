@@ -12,7 +12,21 @@ const GATEWAY_URL = "https://api-gateway.merge.dev/v1/openai/chat/completions";
 const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
 
 export const STORY_MODEL = process.env.STORY_MODEL ?? "anthropic/claude-sonnet-5";
-export const IMAGE_MODEL = process.env.IMAGE_MODEL ?? "openai/gpt-image-2";
+
+/**
+ * Drawing is ~85% of a generation's wall clock, so this choice is the product's
+ * speed. Measured on the same real brief (`bun run bench`):
+ *
+ *   flux.2-klein-4b        4.3s   $0.015   lettering illegible, unusable
+ *   gemini-3.1-flash-image 16.5s  $0.101   good, but duplicated a panel
+ *   gemini-3-pro-image     27.5s  $0.145   best layout, lettering perfect
+ *   gpt-image-1-mini       44.9s  $0.051
+ *   gpt-image-2           148.0s  $0.169   was the default
+ *
+ * Pro wins on all three axes at once: 5.4x faster than gpt-image-2, cheaper,
+ * and it varies panel sizes instead of drawing a uniform grid.
+ */
+export const IMAGE_MODEL = process.env.IMAGE_MODEL ?? "google/gemini-3-pro-image";
 
 /** Total context handed to the story model. Generous, but bounded. */
 const CONTEXT_BUDGET = 60_000;

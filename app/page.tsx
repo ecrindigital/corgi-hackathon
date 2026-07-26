@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ComicActions } from "@/components/comic-actions";
 import { FaceUpload } from "@/components/face-upload";
 
 type Connector = {
@@ -31,7 +32,7 @@ type Comic = {
   models: { story: string; image: string };
 };
 
-type Phase = "welcome" | "connect" | "create";
+type Phase = "welcome" | "connect" | "create" | "result";
 
 const RANGES: { id: TimeRange; label: string; hint: string }[] = [
   { id: "week", label: "Last week", hint: "7 days" },
@@ -52,8 +53,16 @@ export default function Home() {
   const [range, setRange] = useState<TimeRange>("week");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
-  const [comic, setComic] = useState<Comic | null>(null);
   const [copied, setCopied] = useState(false);
+
+  /**
+   * Every take this session, newest first. Regenerating used to throw the
+   * previous page away, which is the wrong instinct: two takes of the same week
+   * are worth comparing, and one of them is usually the keeper.
+   */
+  const [takes, setTakes] = useState<Comic[]>([]);
+  const [active, setActive] = useState(0);
+  const comic = takes[active] ?? null;
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -135,11 +144,10 @@ export default function Home() {
     [loadStatus],
   );
 
-  /** One button. Streams NDJSON progress because drawing takes minutes. */
+  /** One button. Streams NDJSON progress so the wait shows its work. */
   const createComic = useCallback(async () => {
     setBusy(true);
     setError(null);
-    setComic(null);
     setProgress([]);
 
     try {
@@ -167,7 +175,11 @@ export default function Home() {
           const event = JSON.parse(line);
           if (event.error) throw new Error(event.error);
           if (event.message) setProgress((p) => [...p, event.message]);
-          if (event.done) setComic(event as Comic);
+          if (event.done) {
+            setTakes((t) => [event as Comic, ...t]);
+            setActive(0);
+            setPhase("result");
+          }
         }
       }
     } catch (err) {
@@ -190,7 +202,7 @@ export default function Home() {
 
   // ------------------------------------------------------------------ output
 
-  if (comic) {
+  if (phase === "result" && comic) {
     return (
       <Shell>
         <div className="mx-auto max-w-3xl px-6 py-14">
@@ -214,24 +226,81 @@ export default function Home() {
             style={delay(2)}
           />
 
+          {/* Keep it, send it, or go again. */}
           <div className="rise mt-6 flex flex-wrap gap-3" style={delay(5)}>
-            <a
-              href={comic.image}
-              download="my-week.png"
-              className="btn btn-primary btn-primary-hover px-6 py-3"
-            >
-              Download
-            </a>
-            <button
-              onClick={createComic}
-              disabled={busy}
-              className="btn btn-secondary px-6 py-3 disabled:opacity-50"
-            >
-              Draw it again
-            </button>
+            <ComicActions dataUrl={comic.image} filename="my-week.png" />
           </div>
 
-          <details className="card rise mt-10 p-5" style={delay(6)}>
+          <div className="rise mt-8 border-t border-line pt-6" style={delay(6)}>
+            <Eyebrow>Go again</Eyebrow>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                onClick={createComic}
+                disabled={busy}
+                className="btn btn-secondary px-5 py-2.5 text-sm disabled:opacity-50"
+              >
+                {busy ? <span className="breathe">Drawing</span> : "Same week, new take"}
+              </button>
+              <button
+                onClick={() => setPhase("create")}
+                className="btn btn-secondary px-5 py-2.5 text-sm"
+              >
+                Change the period or my face
+              </button>
+              <button
+                onClick={() => setPhase("connect")}
+                className="btn btn-secondary px-5 py-2.5 text-sm"
+              >
+                Add another source
+              </button>
+            </div>
+
+            {busy && (
+              <ol className="mt-5 divide-y divide-line border-y border-line">
+                {progress.map((line, i) => {
+                  const current = i === progress.length - 1;
+                  return (
+                    <li key={i} className="rise flex items-center gap-3 py-2.5 text-sm">
+                      <span
+                        className={`size-1.5 shrink-0 rounded-full ${current ? "breathe bg-primary" : "bg-line"}`}
+                        aria-hidden
+                      />
+                      <span className={current ? "text-ink" : ""}>{line}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            {error && <Notice>{error}</Notice>}
+          </div>
+
+          {/* Earlier takes stay reachable: one of them is usually the keeper. */}
+          {takes.length > 1 && (
+            <div className="rise mt-8" style={delay(7)}>
+              <Eyebrow>
+                {takes.length} takes of this week
+              </Eyebrow>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {takes.map((t, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActive(i)}
+                    aria-pressed={i === active}
+                    aria-label={`Take ${takes.length - i}`}
+                    className={`overflow-hidden rounded-xl border transition-colors duration-150 ${
+                      i === active ? "border-primary" : "border-line hover:border-ink"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- data: URL */}
+                    <img src={t.image} alt="" className="h-24 w-16 object-cover object-top" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <details className="card rise mt-8 p-5" style={delay(8)}>
             <summary className="font-[family-name:var(--font-display)] text-ink">
               What the model decided
             </summary>
@@ -267,7 +336,7 @@ export default function Home() {
             {[
               ["Connect", "Plug in the accounts you want it to read."],
               ["Add your face", "Optional, alone or with someone else."],
-              ["Press one button", "Two minutes later, your page is drawn."],
+              ["Press one button", "About a minute later, your page is drawn."],
             ].map(([title, detail], i) => (
               <li key={title} className="rise flex gap-4 py-4" style={delay(2 + i)}>
                 <span className="w-5 shrink-0 font-[family-name:var(--font-display)] text-sm text-primary">
@@ -399,6 +468,14 @@ export default function Home() {
                 ? "Connect at least one source to continue."
                 : `${connected.length} source${connected.length > 1 ? "s" : ""} connected.`}
             </p>
+            {takes.length > 0 && (
+              <button
+                onClick={() => setPhase("result")}
+                className="text-sm text-body underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-ink"
+              >
+                Back to your comic
+              </button>
+            )}
           </div>
         </div>
       </Shell>
@@ -467,7 +544,7 @@ export default function Home() {
           </button>
         </div>
 
-        {busy && <p className="rise mt-3 text-sm text-body/70">Two to three minutes. Keep this tab open.</p>}
+        {busy && <p className="rise mt-3 text-sm text-body/70">About a minute. Keep this tab open.</p>}
 
         {progress.length > 0 && (
           <ol className="mt-8 divide-y divide-line border-y border-line">
@@ -492,12 +569,22 @@ export default function Home() {
 
         {error && <Notice>{error}</Notice>}
 
-        <button
-          onClick={() => setPhase("connect")}
-          className="mt-8 text-sm text-body underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-ink"
-        >
-          Back to sources
-        </button>
+        <div className="mt-8 flex flex-wrap gap-5 text-sm">
+          <button
+            onClick={() => setPhase("connect")}
+            className="text-body underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-ink"
+          >
+            Back to sources
+          </button>
+          {takes.length > 0 && (
+            <button
+              onClick={() => setPhase("result")}
+              className="text-body underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-ink"
+            >
+              Back to your comic
+            </button>
+          )}
+        </div>
       </div>
     </Shell>
   );
@@ -558,7 +645,7 @@ function ConnectorSkeleton() {
 }
 
 /**
- * The signature moment. Two and a half minutes of nothing would be the weakest
+ * The signature moment. A blank screen would be the weakest
  * part of the product, so the wait becomes the one place the brand colour takes
  * over: an empty page whose panels fill as the pipeline advances, with a light
  * sweeping across whichever panel is being worked on.
