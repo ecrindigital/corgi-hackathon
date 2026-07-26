@@ -78,6 +78,8 @@ NEVER render, and never reference in dialogue:
 
 A security or verification email may inspire a panel's SITUATION ("another sign-in alert"), but the code itself must never appear on any screen, note, or bubble you describe. If you cannot describe a moment without one of the above, choose a different moment.
 
+Private conversations get stricter treatment still. Text threads are other people's words, and they never agreed to appear in a comic. Never quote an incoming message verbatim: take the gist, put it in the main character's mouth or paraphrase it loosely. Skip anything that reads as conflict, romance, health, money or gossip, however funny. The test is simple: if the other person would wince at seeing it drawn, it does not go in.
+
 Output ONLY the image prompt as plain prose. No preamble, no markdown, no explanation, no quotes around it. Begin directly with the description of the comic page.`;
 
 /** One person's slice of the story input. */

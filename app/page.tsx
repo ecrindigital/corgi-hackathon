@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { ComicActions } from "@/components/comic-actions";
 import { FaceUpload } from "@/components/face-upload";
+
+// WebGL has no business running during SSR, and three should not sit in the
+// bundle for anyone who never reaches the welcome screen.
+const Corgi3D = dynamic(() => import("@/components/corgi-3d").then((m) => m.Corgi3D), { ssr: false });
 
 type Connector = {
   slug: string;
@@ -321,11 +326,15 @@ export default function Home() {
     return (
       <Shell>
         <div className="mx-auto flex min-h-[calc(100dvh-57px)] max-w-3xl flex-col justify-center px-6 py-14">
-          <h1 className="rise text-5xl leading-[1.05] sm:text-7xl" style={delay(0)}>
-            Your week,
-            <br />
-            <span className="text-primary">drawn.</span>
-          </h1>
+          <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:items-center sm:gap-6">
+            <h1 className="rise text-5xl leading-[1.05] sm:text-7xl" style={delay(0)}>
+              Your week,
+              <br />
+              <span className="text-primary">drawn.</span>
+            </h1>
+
+            <Corgi3D className="pop size-40 shrink-0 sm:size-56" />
+          </div>
 
           <p className="rise mt-6 max-w-lg text-lg" style={delay(1)}>
             Your life is scattered across a dozen apps. Corgi reads it and turns it into a comic. One
@@ -386,7 +395,11 @@ export default function Home() {
               {status?.connectors.map((c, i) => (
                 <article
                   key={c.slug}
-                  className="card card-interactive rise flex items-start gap-4 p-5"
+                  className={`rise flex items-start gap-4 rounded-xl border p-5 transition-colors duration-200 ${
+                    c.connected
+                      ? "border-primary bg-primary text-surface"
+                      : "card card-interactive"
+                  }`}
                   style={delay(1 + i)}
                 >
                   <span className="text-xl" aria-hidden>
@@ -394,15 +407,17 @@ export default function Home() {
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-base">{c.label}</h2>
-                    {c.blurb && <p className="mt-1 text-sm">{c.blurb}</p>}
+                    <h2 className={`text-base ${c.connected ? "text-surface" : ""}`}>{c.label}</h2>
+                    {c.blurb && (
+                      <p className={`mt-1 text-sm ${c.connected ? "text-surface/85" : ""}`}>{c.blurb}</p>
+                    )}
                   </div>
 
                   {c.connected ? (
                     // Mounts the moment polling sees the credential land. The
                     // pop is the only confirmation the popup ever gives you.
-                    <span className="pop flex shrink-0 items-center gap-2 text-sm text-ink">
-                      <span className="size-2 rounded-full bg-primary" aria-hidden />
+                    <span className="pop flex shrink-0 items-center gap-2 text-sm text-surface">
+                      <span className="size-2 rounded-full bg-surface" aria-hidden />
                       {c.toolCount} tools
                     </span>
                   ) : (

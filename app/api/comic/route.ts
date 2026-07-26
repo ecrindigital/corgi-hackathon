@@ -1,6 +1,7 @@
 import { condenseContext, drawComic, IMAGE_MODEL, STORY_MODEL, writeComicBrief, type Cast } from "@/lib/comic";
 import { dumpOptions, RANGE_DAYS, runDump, type TimeRange } from "@/lib/merge";
 import { getFace } from "@/lib/faces";
+import { readIMessages } from "@/lib/imessage";
 import { getRoom, participants, registeredUserFor } from "@/lib/room";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,15 @@ export async function POST(request: Request) {
         let totalTools = 0;
         const sources = new Set<string>();
 
+        // iMessage lives on this machine, not behind Merge, so it only joins
+        // the person actually sitting at the server.
+        const local = await readIMessages(opts.since, opts.now);
+        if (local.note) send({ step: "context", message: local.note });
+
         for (const { person, report } of reports) {
+          const mine = person.isYou ? local.results : [];
+          if (mine.length) report.results.push(...mine);
+
           const used = report.results.filter((r) => r.status === "ok");
           if (!used.length) continue;
           totalTools += used.length;
