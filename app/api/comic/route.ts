@@ -21,6 +21,7 @@ const RANGE_LABEL: Record<TimeRange, string> = {
  * object; the last one carries the finished comic.
  */
 export async function POST(request: Request) {
+  const devMode = ["true", "1"].includes(new URL(request.url).searchParams.get("dev") ?? "");
   const body = (await request.json().catch(() => ({}))) as { range?: TimeRange };
   const range: TimeRange = body.range && body.range in RANGE_DAYS ? body.range : "week";
 
@@ -108,10 +109,11 @@ export async function POST(request: Request) {
             ? "Inking the page, with your face in it. About half a minute."
             : "Inking the page. About half a minute.",
         });
-        const drawn = await drawComic(brief, faces);
+        const drawn = await drawComic(brief, faces, { devMode });
 
         send({
           done: true,
+          devMode,
           image: drawn.dataUrl,
           brief,
           sources: [...sources],
@@ -120,7 +122,7 @@ export async function POST(request: Request) {
           faces: faces.length,
           range,
           cost: drawn.cost,
-          models: { story: STORY_MODEL, image: IMAGE_MODEL },
+          models: { story: STORY_MODEL, image: devMode ? "dev-placeholder" : IMAGE_MODEL },
         });
       } catch (err) {
         send({ error: (err as Error).message ?? String(err) });

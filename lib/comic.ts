@@ -162,6 +162,26 @@ All lettering must be spelled correctly and easy to read.`;
 
 export type DrawnComic = { dataUrl: string; bytes: number; cost?: number };
 
+function devPlaceholder(): DrawnComic {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1536" viewBox="0 0 1024 1536">
+<rect width="1024" height="1536" fill="#f6f1e4"/>
+<rect x="48" y="48" width="928" height="1440" rx="24" fill="#fffdf7" stroke="#191919" stroke-width="12"/>
+<path d="M48 470h928M48 1040h928M512 470v570" stroke="#191919" stroke-width="12"/>
+<g fill="#ff5c00" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="900" text-anchor="middle">
+<text x="512" y="275" font-size="84">DEV MODE</text>
+<text x="280" y="740" font-size="50">REAL STORY</text>
+<text x="744" y="740" font-size="50">MOCK ART</text>
+<text x="512" y="1285" font-size="64">OPENROUTER OFF</text>
+</g>
+<text x="512" y="1370" fill="#191919" font-family="ui-monospace,monospace" font-size="28" text-anchor="middle">zero-cost local placeholder</text>
+</svg>`;
+  return {
+    dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    bytes: new TextEncoder().encode(svg).byteLength,
+    cost: 0,
+  };
+}
+
 /**
  * Draw the page. OpenRouter's image endpoint returns base64, not a URL.
  *
@@ -169,7 +189,13 @@ export type DrawnComic = { dataUrl: string; bytes: number; cost?: number };
  * cast. gpt-image-2 uses them as character references, which is what makes the
  * drawn person actually resemble the user instead of a generic cartoon.
  */
-export async function drawComic(prompt: string, faces: string[] = []): Promise<DrawnComic> {
+export async function drawComic(
+  prompt: string,
+  faces: string[] = [],
+  options: { devMode: boolean } = { devMode: false },
+): Promise<DrawnComic> {
+  if (options.devMode) return devPlaceholder();
+
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("missing env: OPENROUTER_API_KEY");
 

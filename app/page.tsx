@@ -26,6 +26,7 @@ type Status = { room: string; slot: string; connectors: Connector[]; participant
 type TimeRange = "week" | "month" | "lifetime";
 
 type Comic = {
+  devMode: boolean;
   image: string;
   brief: string;
   sources: string[];
@@ -59,6 +60,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
+  const [devMode, setDevMode] = useState(false);
 
   /**
    * Every take this session, newest first. Regenerating used to throw the
@@ -86,14 +88,21 @@ export default function Home() {
 
   /** A ?join=CODE link puts this browser in someone else's room as person B. */
   const bootstrap = useCallback(async () => {
-    const code = new URLSearchParams(window.location.search).get("join");
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("join");
+    setDevMode(["true", "1"].includes(params.get("dev") ?? ""));
     if (code) {
       await fetch("/api/room", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       }).catch(() => {});
-      window.history.replaceState({}, "", window.location.pathname);
+      params.delete("join");
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${params.size ? `?${params}` : ""}`,
+      );
       setPhase("connect");
     }
     await loadStatus();
@@ -156,7 +165,7 @@ export default function Home() {
     setProgress([]);
 
     try {
-      const res = await fetch("/api/comic", {
+      const res = await fetch(`/api/comic${devMode ? "?dev=true" : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ range }),
@@ -192,14 +201,16 @@ export default function Home() {
     } finally {
       setBusy(false);
     }
-  }, [range]);
+  }, [devMode, range]);
 
   const copyInvite = useCallback(async () => {
     if (!status) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/?join=${status.room}`);
+    const params = new URLSearchParams({ join: status.room });
+    if (devMode) params.set("dev", "true");
+    await navigator.clipboard.writeText(`${window.location.origin}/?${params}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [status]);
+  }, [devMode, status]);
 
   const connected = status?.connectors.filter((c) => c.connected) ?? [];
   const ready = status?.participants.filter((p) => p.connectors.length > 0) ?? [];
@@ -209,10 +220,14 @@ export default function Home() {
 
   if (phase === "result" && comic) {
     return (
-      <Shell onHome={() => setPhase("welcome")}>
+      <Shell devMode={devMode} onHome={() => setPhase("welcome")}>
         <div className="mx-auto max-w-3xl px-6 py-14">
           <div className="rise" style={delay(0)}>
-            <Eyebrow>{RANGES.find((r) => r.id === comic.range)?.label ?? comic.range}</Eyebrow>
+            <Eyebrow>
+              {comic.devMode
+                ? "DEV PLACEHOLDER"
+                : RANGES.find((r) => r.id === comic.range)?.label ?? comic.range}
+            </Eyebrow>
             <h1 className="mt-3 text-4xl sm:text-5xl">
               {comic.people > 1 ? "Your lives. Drawn together." : "Your life, drawn."}
             </h1>
@@ -233,7 +248,10 @@ export default function Home() {
 
           {/* Keep it, send it, or go again. */}
           <div className="rise mt-6 flex flex-wrap gap-3" style={delay(5)}>
-            <ComicActions dataUrl={comic.image} filename="my-life-drawn.png" />
+            <ComicActions
+              dataUrl={comic.image}
+              filename={comic.devMode ? "dev-placeholder.svg" : "my-life-drawn.png"}
+            />
           </div>
 
           <div className="rise mt-8 border-t border-edge pt-6" style={delay(6)}>
@@ -324,7 +342,7 @@ export default function Home() {
 
   if (phase === "welcome") {
     return (
-      <Shell onHome={() => setPhase("welcome")}>
+      <Shell devMode={devMode} onHome={() => setPhase("welcome")}>
         <div className="mx-auto flex min-h-[calc(100dvh-57px)] max-w-3xl flex-col justify-center px-6 py-6 sm:py-8">
           <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:items-center sm:gap-6">
             <h1 className="rise text-5xl leading-[1.05] sm:text-7xl" style={delay(0)}>
@@ -376,7 +394,7 @@ export default function Home() {
 
   if (phase === "connect") {
     return (
-      <Shell step="1 of 2" room={status?.room} onHome={() => setPhase("welcome")}>
+      <Shell devMode={devMode} step="1 of 2" room={status?.room} onHome={() => setPhase("welcome")}>
         <div className="mx-auto max-w-4xl px-6 py-14">
           <div className="rise" style={delay(0)}>
             <Eyebrow>Sources</Eyebrow>
@@ -498,7 +516,7 @@ export default function Home() {
   // ------------------------------------------------------------------ create
 
   return (
-    <Shell step="2 of 2" room={status?.room} onHome={() => setPhase("welcome")}>
+    <Shell devMode={devMode} step="2 of 2" room={status?.room} onHome={() => setPhase("welcome")}>
       <div className="mx-auto max-w-2xl px-6 py-14">
         <div className="rise" style={delay(0)}>
           <Eyebrow>Ready</Eyebrow>
@@ -594,11 +612,13 @@ function Shell({
   children,
   step,
   room,
+  devMode,
   onHome,
 }: {
   children: React.ReactNode;
   step?: string;
   room?: string;
+  devMode?: boolean;
   onHome: () => void;
 }) {
   return (
@@ -615,10 +635,17 @@ function Shell({
           <button onClick={onHome} className="font-black text-fg">
             Toonback<span className="text-orange">.</span>
           </button>
-          <span className="text-xs text-muted">
-            {room && <span className="mr-3 font-mono tracking-widest">{room}</span>}
-            {step}
-          </span>
+          <div className="flex items-center gap-3">
+            {devMode && (
+              <span className="border-2 border-fg bg-yellow px-2 py-1 text-[10px] font-black uppercase tracking-wide">
+                DEV MODE · OpenRouter off
+              </span>
+            )}
+            <span className="text-xs text-muted">
+              {room && <span className="mr-3 font-mono tracking-widest">{room}</span>}
+              {step}
+            </span>
+          </div>
         </div>
       </header>
       <main>{children}</main>
@@ -646,7 +673,6 @@ const CONNECTOR_LOGOS: Record<string, string> = {
   gmail: "https://cdn.simpleicons.org/gmail",
   google_calendar: "https://cdn.simpleicons.org/googlecalendar",
   google_drive: "https://cdn.simpleicons.org/googledrive",
-  google_maps: "https://cdn.simpleicons.org/googlemaps",
   x: "https://cdn.simpleicons.org/x",
   spotify: "https://cdn.simpleicons.org/spotify",
   oura: "https://api.iconify.design/arcticons:oura.svg",

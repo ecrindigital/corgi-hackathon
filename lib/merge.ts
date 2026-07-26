@@ -42,11 +42,6 @@ const CONNECTOR_META: Record<string, { label: string; emoji: string; blurb: stri
     blurb: "Where you were, with whom, and what it was called",
   },
   google_drive: { label: "Google Drive", emoji: "📁", blurb: "Files you touched, and what you kept" },
-  google_maps: {
-    label: "Google Maps",
-    emoji: "🗺️",
-    blurb: "Places and directions (no personal location history)",
-  },
   x: { label: "X / Twitter", emoji: "🐦", blurb: "What you posted, liked and bookmarked" },
   spotify: { label: "Spotify", emoji: "🎧", blurb: "The soundtrack of your life" },
   oura: { label: "Oura", emoji: "💍", blurb: "Sleep, readiness, and comedic contrast" },
@@ -262,6 +257,7 @@ function dateValue(schema: JsonSchema | undefined, d: Date): string | number {
 
 /** Gmail search syntax wants slashes: after:2026/07/19 */
 const slashDate = (d: Date) => isoDate(d).replace(/-/g, "/");
+const OMIT = Symbol("omit");
 
 /**
  * A few fields are only meaningful per connector. Kept deliberately tiny — the
@@ -273,6 +269,14 @@ const CONNECTOR_HINTS: Record<string, (field: string, opts: DumpOptions) => unkn
   // what we want, so leave it null and let the API return everything.
   gmail: (field, opts) =>
     field === "q" ? (opts.since ? `after:${slashDate(opts.since)}` : null) : undefined,
+  google_calendar: (field) =>
+    field === "calendar_id" ? "primary" : field === "single_events" ? true : undefined,
+  spotify: (field, opts) =>
+    field === "after"
+      ? opts.since?.getTime() ?? OMIT
+      : field === "before"
+        ? null
+        : undefined,
 };
 
 /** `user_id`, `userId` and `USER_ID` are the same parameter. */
@@ -339,6 +343,7 @@ function buildArgs(
     }
 
     const hinted = hintFor(key, def, opts, connector, discovered);
+    if (hinted === OMIT) continue;
     if (hinted !== undefined) {
       args[key] = hinted;
       continue;
