@@ -2,7 +2,7 @@ import { condenseContext, drawComic, IMAGE_MODEL, STORY_MODEL, writeComicBrief, 
 import { getContextBundle } from "@/lib/context-items";
 import { dumpOptions, RANGE_DAYS, runDump, type DumpReport, type TimeRange } from "@/lib/merge";
 import { getFace } from "@/lib/faces";
-import { readIMessages } from "@/lib/imessage";
+import { readIMessages, type IMessageOutcome } from "@/lib/imessage";
 import { getRoom, participants, registeredUserFor } from "@/lib/room";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +34,18 @@ export async function POST(request: Request) {
 
       try {
         const room = await getRoom();
-        const people = await participants(room);
-        const active = people.filter((p) => p.connectors.length > 0 || p.contextCount > 0);
+        const opts = dumpOptions({ windowDays: RANGE_DAYS[range] });
+        const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(new URL(request.url).hostname);
+        const localPromise: Promise<IMessageOutcome> = isLocalhost
+          ? readIMessages(opts.since, opts.now)
+          : Promise.resolve({ available: false, results: [] });
+        const [people, local] = await Promise.all([
+          participants(room),
+          localPromise,
+        ]);
+        const active = people.filter(
+          (p) => p.connectors.length > 0 || p.contextCount > 0 || (p.isYou && local.available),
+        );
 
         if (!active.length) {
           send({ error: "Nobody in this room has connected a source yet." });
@@ -51,7 +61,6 @@ export async function POST(request: Request) {
 
         // Both participants are read in parallel — one slow mailbox shouldn't
         // double the wait.
-        const opts = dumpOptions({ windowDays: RANGE_DAYS[range] });
         const reports = await Promise.all(
           active.map(async (p) => {
             const empty: DumpReport = {
@@ -83,7 +92,6 @@ export async function POST(request: Request) {
 
         // iMessage lives on this machine, not behind Merge, so it only joins
         // the person actually sitting at the server.
-        const local = await readIMessages(opts.since, opts.now);
         if (local.note) send({ step: "context", message: local.note });
 
         for (const { person, report, context } of reports) {

@@ -452,6 +452,8 @@ export default function Home() {
                       <span className="size-2 rounded-full bg-card" aria-hidden />
                       {c.toolCount} tools
                     </span>
+                  ) : !c.inPack ? (
+                    <span className="shrink-0 text-sm text-muted">Needs access</span>
                   ) : (
                     <button
                       onClick={() => connect(c.slug)}

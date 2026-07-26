@@ -13,7 +13,7 @@
  * 2. It only exists on the machine running the server. This source works under
  *    `bun run dev` on a Mac and silently disappears on Vercel.
  *
- * Off by default. Set IMESSAGE_ENABLED=true to opt in.
+ * Auto-detected on macOS. Set IMESSAGE_ENABLED=false to opt out.
  */
 
 import { homedir } from "node:os";
@@ -39,15 +39,19 @@ async function openDatabase(path: string): Promise<SqliteDb> {
 
   let last: unknown;
   for (const [specifier, construct] of attempts) {
+    let mod: Record<string, unknown>;
     try {
-      const mod = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ specifier)) as Record<
+      mod = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ specifier)) as Record<
         string,
         unknown
       >;
-      return construct(mod);
     } catch (err) {
       last = err;
+      continue;
     }
+    // The runtime exists. Surface database errors such as macOS permission
+    // denial instead of masking them by trying another runtime.
+    return construct(mod);
   }
   throw last instanceof Error ? last : new Error("no SQLite runtime available");
 }
@@ -123,7 +127,7 @@ function decodeAttributedBody(blob: Uint8Array | null): string | null {
   return buf.subarray(i, i + length).toString("utf8").trim() || null;
 }
 
-const isAvailable = () => process.env.IMESSAGE_ENABLED === "true";
+const isEnabled = () => process.platform === "darwin" && process.env.IMESSAGE_ENABLED !== "false";
 
 /** A short, human label for whoever sent it. Never a full phone number. */
 function speaker(row: Row): string {
@@ -135,14 +139,14 @@ function speaker(row: Row): string {
   return digits ? `contact ${digits.slice(-4)}` : "someone";
 }
 
-export type IMessageOutcome = { results: ToolResult[]; note?: string };
+export type IMessageOutcome = { available: boolean; results: ToolResult[]; note?: string };
 
 /**
  * Returns conversation transcripts shaped like any other tool result, so the
  * rest of the pipeline treats iMessage as just another source.
  */
 export async function readIMessages(since: Date | null, now: Date): Promise<IMessageOutcome> {
-  if (!isAvailable()) return { results: [] };
+  if (!isEnabled()) return { available: false, results: [] };
 
   let db: SqliteDb;
   try {
@@ -150,6 +154,7 @@ export async function readIMessages(since: Date | null, now: Date): Promise<IMes
   } catch (err) {
     const message = (err as Error).message ?? String(err);
     return {
+      available: false,
       results: [],
       note: /authorization denied|unable to open/i.test(message)
         ? "iMessage is enabled but macOS denied access. Grant Full Disk Access to your terminal in System Settings > Privacy & Security."
@@ -211,7 +216,7 @@ export async function readIMessages(since: Date | null, now: Date): Promise<IMes
       truncated: false,
     }));
 
-    return { results };
+    return { available: true, results };
   } finally {
     db.close();
   }
