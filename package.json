@@ -1,0 +1,16 @@
+{
+  "name": "corgi-hackathon-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "bun run scripts/merge-setup.ts",
+    "dump": "bun run scripts/dump-context.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}
