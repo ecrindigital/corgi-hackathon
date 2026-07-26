@@ -16,13 +16,19 @@
 const API = process.env.MERGE_API_BASE ?? "https://ah-api.merge.dev";
 const API_KEY = process.env.MERGE_AGENT_HANDLER_API_KEY;
 
-/** Personal connectors worth having for a "your week as a comic" context dump. */
+/**
+ * Personal connectors worth having for a "your week as a comic" context dump.
+ *
+ * Slugs use underscores, matching the `authenticate_<slug>` tool names — NOT the
+ * hyphens used in the docs URLs. `google-drive` is rejected with "Connector not
+ * found"; `google_drive` works. All of these are verified against the live API.
+ */
 const PERSONAL_CONNECTORS = [
   "gmail",
-  "google-calendar",
-  "google-drive",
-  "google-tasks",
-  "google-meet",
+  "google_calendar",
+  "google_drive",
+  "google_tasks",
+  "google_meet",
   "outlook",
   "spotify",
   "oura",
@@ -34,9 +40,6 @@ const PERSONAL_CONNECTORS = [
   "plaud",
   "dropbox",
   "github",
-  "canva",
-  "figma",
-  "slack",
 ];
 
 function arg(name: string): string | undefined {
@@ -60,7 +63,7 @@ async function post(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  let json: any;
+  let json: Record<string, unknown>;
   try {
     json = JSON.parse(text);
   } catch {

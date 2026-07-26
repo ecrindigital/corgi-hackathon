@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #fdf6e3;
+  --color-ink: #14110f;
+  --color-pop: #ff4d6d;
+  --color-sky: #4cc9f0;
+  --color-sun: #ffd166;
+  --color-mint: #06d6a0;
+  --color-grape: #9b5de5;
+
+  --font-display: var(--font-display), system-ui, sans-serif;
+  --font-body: var(--font-body), system-ui, sans-serif;
+}
+
+/*
+ * The comic look is three things: a hard black outline, a solid offset shadow
+ * instead of a blur, and a paper-coloured ground. Everything else is layout.
+ */
+@utility panel {
+  border: 3px solid var(--color-ink);
+  border-radius: 0.9rem;
+  box-shadow: 6px 6px 0 var(--color-ink);
+}
+
+@utility panel-sm {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.7rem;
+  box-shadow: 3px 3px 0 var(--color-ink);
+}
+
+body {
+  background-color: var(--color-paper);
+  /* halftone dots — the cheapest way to say "printed comic" */
+  background-image: radial-gradient(rgba(20, 17, 15, 0.13) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -11px -11px;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
