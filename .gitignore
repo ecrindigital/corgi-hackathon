@@ -26,3 +26,4 @@ output/
 yarn-debug.log*
 yarn-error.log*
 !.env.example
+.env*.local

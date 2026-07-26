@@ -1,5 +1,6 @@
 import { condenseContext, drawComic, IMAGE_MODEL, STORY_MODEL, writeComicBrief, type Cast } from "@/lib/comic";
-import { dumpOptions, RANGE_DAYS, runDump, type TimeRange } from "@/lib/merge";
+import { getContextBundle } from "@/lib/context-items";
+import { dumpOptions, RANGE_DAYS, runDump, type DumpReport, type TimeRange } from "@/lib/merge";
 import { getFace } from "@/lib/faces";
 import { readIMessages } from "@/lib/imessage";
 import { getRoom, participants, registeredUserFor } from "@/lib/room";
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
       try {
         const room = await getRoom();
         const people = await participants(room);
-        const active = people.filter((p) => p.connectors.length > 0);
+        const active = people.filter((p) => p.connectors.length > 0 || p.contextCount > 0);
 
         if (!active.length) {
           send({ error: "Nobody in this room has connected a source yet." });
@@ -52,10 +53,27 @@ export async function POST(request: Request) {
         // double the wait.
         const opts = dumpOptions({ windowDays: RANGE_DAYS[range] });
         const reports = await Promise.all(
-          active.map(async (p) => ({
-            person: p,
-            report: await runDump(await registeredUserFor({ code: room.code, slot: p.slot }), opts),
-          })),
+          active.map(async (p) => {
+            const empty: DumpReport = {
+              toolCount: 0,
+              results: [],
+              skipped: [],
+              unauthenticated: [],
+              options: {
+                windowDays: opts.windowDays,
+                since: opts.since?.toISOString() ?? null,
+                now: opts.now.toISOString(),
+              },
+            };
+            const [report, context] = await Promise.all([
+              p.connectors.length
+                ? runDump(await registeredUserFor({ code: room.code, slot: p.slot }), opts)
+                : Promise.resolve(empty),
+              getContextBundle(room.code, p.slot, opts.now),
+            ]);
+            report.results.push(...context.results);
+            return { person: p, report, context };
+          }),
         );
 
         const cast: Cast[] = [];
@@ -68,7 +86,7 @@ export async function POST(request: Request) {
         const local = await readIMessages(opts.since, opts.now);
         if (local.note) send({ step: "context", message: local.note });
 
-        for (const { person, report } of reports) {
+        for (const { person, report, context } of reports) {
           const mine = person.isYou ? local.results : [];
           if (mine.length) report.results.push(...mine);
 
@@ -79,7 +97,12 @@ export async function POST(request: Request) {
 
           const face = getFace(room.code, person.slot);
           const label = person.slot.toUpperCase();
-          cast.push({ label, context: condenseContext(report.results), hasFace: Boolean(face) });
+          cast.push({
+            label,
+            context: condenseContext(report.results),
+            contextImages: context.images,
+            hasFace: Boolean(face),
+          });
           if (face) faces.push(face);
         }
 

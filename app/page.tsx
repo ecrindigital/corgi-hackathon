@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { ComicActions } from "@/components/comic-actions";
+import { ContextInput } from "@/components/context-input";
 import { Dither } from "@/components/dither";
 import { FaceUpload } from "@/components/face-upload";
 
@@ -19,7 +20,13 @@ type Connector = {
   inPack: boolean;
 };
 
-type Participant = { slot: string; isYou: boolean; connectors: string[]; hasFace: boolean };
+type Participant = {
+  slot: string;
+  isYou: boolean;
+  connectors: string[];
+  contextCount: number;
+  hasFace: boolean;
+};
 
 type Status = { room: string; slot: string; connectors: Connector[]; participants: Participant[] };
 
@@ -213,8 +220,13 @@ export default function Home() {
   }, [devMode, status]);
 
   const connected = status?.connectors.filter((c) => c.connected) ?? [];
-  const ready = status?.participants.filter((p) => p.connectors.length > 0) ?? [];
-  const partner = status?.participants.find((p) => !p.isYou && p.connectors.length > 0);
+  const mine = status?.participants.find((p) => p.isYou);
+  const contextCount = mine?.contextCount ?? 0;
+  const ready =
+    status?.participants.filter((p) => p.connectors.length > 0 || p.contextCount > 0) ?? [];
+  const partner = status?.participants.find(
+    (p) => !p.isYou && (p.connectors.length > 0 || p.contextCount > 0),
+  );
 
   // ------------------------------------------------------------------ output
 
@@ -406,6 +418,10 @@ export default function Home() {
 
           {error && <Notice>{error}</Notice>}
 
+          {status && (
+            <ContextInput room={status.room} slot={status.slot} onChange={() => loadStatus()} />
+          )}
+
           {!status && !error ? (
             <ConnectorSkeleton />
           ) : (
@@ -476,8 +492,9 @@ export default function Home() {
               <p className="text-sm">
                 {partner ? (
                   <span className="pop inline-block">
-                    Someone joined with {partner.connectors.length} source
-                    {partner.connectors.length > 1 ? "s" : ""}.
+                    Someone joined with{" "}
+                    {partner.connectors.length + (partner.contextCount > 0 ? 1 : 0)} source
+                    {partner.connectors.length + (partner.contextCount > 0 ? 1 : 0) > 1 ? "s" : ""}.
                   </span>
                 ) : (
                   "Nobody yet. Solo works fine."
@@ -489,15 +506,17 @@ export default function Home() {
           <div className="rise mt-10 flex flex-wrap items-center gap-4 border-t border-edge pt-8" style={delay(5)}>
             <button
               onClick={() => setPhase("create")}
-              disabled={connected.length === 0}
+              disabled={connected.length === 0 && contextCount === 0}
               className="btn btn-primary px-7 py-3 disabled:opacity-40"
             >
               Continue
             </button>
             <p className="text-sm">
-              {connected.length === 0
-                ? "Connect at least one source to continue."
-                : `${connected.length} source${connected.length > 1 ? "s" : ""} connected.`}
+              {connected.length === 0 && contextCount === 0
+                ? "Add context or connect at least one source to continue."
+                : `${connected.length + (contextCount > 0 ? 1 : 0)} source${
+                    connected.length + (contextCount > 0 ? 1 : 0) > 1 ? "s" : ""
+                  } ready.`}
             </p>
             {takes.length > 0 && (
               <button
@@ -523,7 +542,13 @@ export default function Home() {
           <h1 className="mt-3 text-3xl sm:text-4xl">
             {ready.length > 1 ? "Two of you. One comic." : "Let’s turn this into a comic."}
           </h1>
-          <p className="mt-3">Currently reading {connected.map((c) => c.label).join(", ")}.</p>
+          <p className="mt-3">
+            Currently reading{" "}
+            {[...connected.map((c) => c.label), ...(contextCount ? ["your added context"] : [])].join(
+              ", ",
+            )}
+            .
+          </p>
         </div>
 
         <div className="card rise mt-8 p-5" style={delay(1)}>

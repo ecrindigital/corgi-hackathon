@@ -43,6 +43,7 @@ export async function GET() {
         slot: p.slot,
         isYou: p.isYou,
         connectors: p.connectors,
+        contextCount: p.contextCount,
         hasFace: Boolean(getFace(room.code, p.slot)),
       })),
     });

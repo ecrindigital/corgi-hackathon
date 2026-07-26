@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { getContextItems } from "./context-items";
 import { ensureRegisteredUser, getRegisteredUser } from "./merge";
 
 const COOKIE = "corgi_room";
@@ -11,6 +12,7 @@ export type Participant = {
   slot: Slot;
   userId: string;
   connectors: string[];
+  contextCount: number;
   isYou: boolean;
 };
 
@@ -93,11 +95,15 @@ export async function participants(room: Room): Promise<Participant[]> {
     SLOTS.map(async (slot) => {
       const userId = await registeredUserFor({ code: room.code, slot }).catch(() => null);
       if (!userId) return null;
-      const info = await getRegisteredUser(userId);
+      const [info, context] = await Promise.all([
+        getRegisteredUser(userId),
+        getContextItems(room.code, slot),
+      ]);
       return {
         slot,
         userId,
         connectors: info?.authenticated_connectors ?? [],
+        contextCount: context.length,
         isYou: slot === room.slot,
       } satisfies Participant;
     }),

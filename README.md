@@ -4,16 +4,21 @@
 
 Toonback turns the scattered details of your digital life into a personal comic.
 
-Connect the services you already use, choose how far back to look, upload a full-body photo, and press one button. Toonback finds the moments that make your life yours and returns a funny, warm comic starring you.
+Connect the services you already use, choose the last week, last month, or your lifetime, and press one button. Optionally add a face photo so the comic stars a cartoon version of you.
 
 ## How it works
 
 1. Connect your personal accounts.
-2. Upload a full-body photo.
-3. Press **Create my comic**.
-4. Download, share, or generate another comic.
+2. Optionally upload a clear face photo.
+3. Choose **Last week**, **Last month**, or **Lifetime**.
+4. Press **Create my comic**.
+5. Download, share, or generate another comic.
 
 The finished comic keeps the same cartoon character and visual style across every panel.
+
+## Duo comics
+
+To make a comic with someone else, send them the room invitation link shown during setup. They connect their own accounts and can optionally add their face. Toonback then looks across both people's context for shared moments, contrasts, and places where their lives collide.
 
 ## Merge integration
 
@@ -35,7 +40,7 @@ Toonback gives its context agent a curated set of read-only tools from the conne
 ```mermaid
 flowchart LR
     A["Connected accounts"] -->|"Merge Agent Handler"| B["Context agent"]
-    C["Full-body photo"] --> D["Comic model"]
+    C["Optional face photo"] --> D["Comic model"]
     B --> D
     D --> E["Finished comic"]
 ```
@@ -44,7 +49,6 @@ flowchart LR
 
 - Next.js
 - TypeScript
-- Vercel AI SDK
 - Merge Agent Handler and Merge Link
 - Vercel
 - Vercel Blob for shared comics
@@ -53,7 +57,7 @@ flowchart LR
 
 Toonback uses personal context and the uploaded photo only while generating the comic. It does not permanently store either.
 
-Generated comics remain temporary until the user creates a share link. Toonback then uploads only the finished comic to Vercel Blob. Anyone with the link can view it.
+Generated comics remain temporary until the user creates a share link. Toonback then uploads only the finished comic to private Vercel Blob storage and creates an unguessable public link. Anyone with the link can view it.
 
 ## Hackathon
 
