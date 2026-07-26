@@ -4,7 +4,7 @@
 
 Toonback turns the scattered details of your digital life into a personal comic.
 
-Connect the services you already use, upload a full-body photo, and press one button. Toonback looks back at your last seven days, finds the moments that made the week yours, and returns a funny, warm comic starring you.
+Connect the services you already use, choose how far back to look, upload a full-body photo, and press one button. Toonback finds the moments that make your life yours and returns a funny, warm comic starring you.
 
 ## How it works
 
@@ -28,7 +28,7 @@ The finished comic keeps the same cartoon character and visual style across ever
 
 Users authorize each service they want to include. Merge handles authentication, credentials, token refresh, and tool access through a single integration.
 
-Toonback gives its context agent a curated set of read-only tools from the connected services. The agent collects relevant moments from the last seven days, removes sensitive details, and sends the resulting context and character photo to the comic-generation model.
+Toonback gives its context agent a curated set of read-only tools from the connected services. The agent collects relevant moments from the chosen chapter of your life, removes sensitive details, and sends the resulting context and character photo to the comic-generation model.
 
 ## Architecture
 

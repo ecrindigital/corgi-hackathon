@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         const duo = active.length > 1;
         send({
           step: "context",
-          message: duo ? "Reading both your weeks…" : "Reading your week…",
+          message: duo ? "Reading both your lives…" : "Reading your life…",
         });
 
         // Both participants are read in parallel — one slow mailbox shouldn't
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         send({
           step: "story",
           message: duo
-            ? "Finding where your two weeks collide…"
+            ? "Finding where your two lives collide…"
             : "Deciding which moments deserve a panel…",
         });
         const brief = await writeComicBrief(cast, RANGE_LABEL[range]);

@@ -13,7 +13,7 @@ Living notes for the team. Update this file as decisions change.
 - Comic quality is the core work: a story that makes sense, attractive comic art, readable dialogue, a coherent style, and the same recognizable cartoon character across panels.
 - The interface should feel playful and cartoon-like, matching the generated comic rather than looking like a corporate AI dashboard.
 - The model decides the story, panel count, layout, dialogue, and visual direction. The product does not expose reasoning or add storyboard, layout, or caption-editing systems.
-- The default period is the user's last seven days. Other periods are deferred.
+- The user can draw the last week, last month, or their lifetime. Last week remains the default.
 - Generate only when the connected sources contain enough real material. If they do not, ask the user to connect another source rather than producing a generic comic.
 - The default tone is funny, warm, slightly chaotic, and affectionate—never corporate, motivational, or mean.
 - Light self-deprecating humor is allowed. Cruelty, humiliation, appearance jokes, and jokes about sensitive topics are not.
@@ -29,7 +29,7 @@ Living notes for the team. Update this file as decisions change.
 - For the hackathon, share the direct Vercel Blob URL. Do not add a database, branded share page, authenticated sharing, or automatic persistence.
 - During setup, clearly disclose that selected personal data and the uploaded photo are sent to AI providers to generate the comic.
 - Never silently mix fixture or invented data into a real user's comic. Seeded data exists only in an explicitly identified demo mode.
-- Product promise: **Your life, drawn.** Supporting line: **Connect your digital life and turn your week into a comic.**
+- Product promise: **Your life, drawn.** Supporting line: **Connect your digital life and turn it into a comic that is unmistakably yours.**
 - Merge is the primary sponsor integration. The product should be able to use multiple personal connectors rather than being designed around one provider.
 - Offer all useful personal Connectors supported by Merge rather than choosing a three-Connector demo product. The user may authenticate any subset.
 - Each third-party Connector requires separate user authentication. Merge centralizes the UI, credential storage, token refresh, and tool access, but it cannot bypass provider consent.
@@ -215,7 +215,7 @@ Photon is currently optional. It should not delay the core comic-generation loop
 Core demo:
 
 - Connect any available personal sources through Merge
-- Use the default "last seven days" period
+- Let the user choose the chapter of their life: last week, last month, or lifetime
 - Upload one clear full-body character-reference photo
 - Generate one coherent comic image
 - Display and download/share the result

@@ -62,7 +62,7 @@ export default function Home() {
 
   /**
    * Every take this session, newest first. Regenerating used to throw the
-   * previous page away, which is the wrong instinct: two takes of the same week
+   * previous page away, which is the wrong instinct: two takes of the same story
    * are worth comparing, and one of them is usually the keeper.
    */
   const [takes, setTakes] = useState<Comic[]>([]);
@@ -214,7 +214,7 @@ export default function Home() {
           <div className="rise" style={delay(0)}>
             <Eyebrow>{RANGES.find((r) => r.id === comic.range)?.label ?? comic.range}</Eyebrow>
             <h1 className="mt-3 text-4xl sm:text-5xl">
-              {comic.people > 1 ? "Your week. Both of you." : "Your week."}
+              {comic.people > 1 ? "Your lives. Drawn together." : "Your life, drawn."}
             </h1>
             <p className="mt-3 max-w-xl">
               Drawn from {comic.toolsUsed} pieces of {comic.sources.join(", ")}
@@ -233,7 +233,7 @@ export default function Home() {
 
           {/* Keep it, send it, or go again. */}
           <div className="rise mt-6 flex flex-wrap gap-3" style={delay(5)}>
-            <ComicActions dataUrl={comic.image} filename="my-week.png" />
+            <ComicActions dataUrl={comic.image} filename="my-life-drawn.png" />
           </div>
 
           <div className="rise mt-8 border-t border-edge pt-6" style={delay(6)}>
@@ -244,7 +244,7 @@ export default function Home() {
                 disabled={busy}
                 className="btn btn-secondary px-5 py-2.5 text-sm disabled:opacity-50"
               >
-                {busy ? <span className="breathe">Drawing</span> : "Same week, new take"}
+                {busy ? <span className="breathe">Drawing</span> : "Same story, new take"}
               </button>
               <button
                 onClick={() => setPhase("create")}
@@ -284,7 +284,7 @@ export default function Home() {
           {takes.length > 1 && (
             <div className="rise mt-8" style={delay(7)}>
               <Eyebrow>
-                {takes.length} takes of this week
+                {takes.length} takes of this story
               </Eyebrow>
               <div className="mt-3 flex flex-wrap gap-3">
                 {takes.map((t, i) => (
@@ -328,7 +328,7 @@ export default function Home() {
         <div className="mx-auto flex min-h-[calc(100dvh-57px)] max-w-3xl flex-col justify-center px-6 py-6 sm:py-8">
           <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:items-center sm:gap-6">
             <h1 className="rise text-5xl leading-[1.05] sm:text-7xl" style={delay(0)}>
-              Your week,
+              Your life,
               <br />
               <span className="text-orange">drawn.</span>
             </h1>
@@ -441,7 +441,7 @@ export default function Home() {
             <h2 className="text-base">Make it a duo</h2>
             <p className="mt-1 max-w-xl text-sm">
               Send this link to someone. They connect their own accounts, and the story goes looking for
-              where your two weeks collide.
+              where your two lives collide.
             </p>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">

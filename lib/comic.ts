@@ -61,7 +61,7 @@ You will receive raw data pulled from their connected accounts over a time windo
 Rules for the comic you design:
 - 3 to 6 panels on one page. You choose the count and the layout.
 - Describe every recurring character identically every time they appear (hair, glasses, clothing, build). This is the single most important requirement: the reader must recognise the same person in every panel.
-- Ground it in the ACTUAL data. Use real event names, real places, real people's first names, real songs, real times of day. A generic "developer has a busy week" comic is a failure.
+- Ground it in the ACTUAL data. Use real event names, real places, real people's first names, real songs, real times of day. A generic life recap is a failure.
 - Give every speech bubble its exact words. Keep them short. Demand correct spelling and clean, readable comic lettering.
 - Never use em dashes or en dashes in any lettering. Use a full stop, a comma or a colon instead. Hand lettering makes long dashes look like mistakes.
 - Warm and funny, never mean. Affectionate teasing is good; humiliation is not.
@@ -97,7 +97,7 @@ function castInstructions(cast: Cast[]): string {
   if (cast.length > 1) {
     lines.push(
       `This comic has TWO main characters, PERSON A and PERSON B, and their data is given separately below.`,
-      `Both must appear together in most panels. Find where their weeks actually intersect — shared events, messages between them, the same day going differently for each — and make the story about the pair, not two separate strips stitched together. If their data barely overlaps, that contrast IS the joke.`,
+      `Both must appear together in most panels. Find where their lives actually intersect — shared events, messages between them, the same day going differently for each — and make the story about the pair, not two separate strips stitched together. If their data barely overlaps, that contrast IS the joke.`,
       `Give each a distinct, consistent look so they are never confused for one another.`,
     );
   }

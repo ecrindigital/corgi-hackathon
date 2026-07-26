@@ -29,7 +29,7 @@ const subscribe = () => () => {};
  * Save and send.
  *
  * The Web Share sheet is the whole point on a phone: it drops the page straight
- * into iMessage or WhatsApp, which is where a comic about your week actually
+ * into iMessage or WhatsApp, which is where a comic about your life actually
  * wants to end up. Desktop browsers rarely support sharing files, so they get
  * copy-to-clipboard instead, and anything older falls back to the download link
  * that is always there.
@@ -48,8 +48,8 @@ export function ComicActions({ dataUrl, filename }: { dataUrl: string; filename:
         const file = await toFile(dataUrl, filename);
         await navigator.share({
           files: [file],
-          title: "My week as a comic",
-          text: "My week, drawn by Toonback.",
+          title: "My life, drawn",
+          text: "My life, drawn by Toonback.",
         });
         setState("idle");
         return;

@@ -48,7 +48,7 @@ const CONNECTOR_META: Record<string, { label: string; emoji: string; blurb: stri
     blurb: "Places and directions (no personal location history)",
   },
   x: { label: "X / Twitter", emoji: "🐦", blurb: "What you posted, liked and bookmarked" },
-  spotify: { label: "Spotify", emoji: "🎧", blurb: "The soundtrack of your week" },
+  spotify: { label: "Spotify", emoji: "🎧", blurb: "The soundtrack of your life" },
   oura: { label: "Oura", emoji: "💍", blurb: "Sleep, readiness, and comedic contrast" },
   whoop: { label: "WHOOP", emoji: "⌚", blurb: "Workouts, strain and recovery" },
   notion: { label: "Notion", emoji: "📓", blurb: "Thoughts and half-finished plans" },
