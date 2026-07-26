@@ -38,7 +38,9 @@ function buildReport(report: DumpReport): string {
   lines.push(RULE, "CORGI — RAW PERSONAL CONTEXT DUMP", RULE);
   lines.push(`generated_at      ${report.options.now}`);
   lines.push(
-    `window            ${isoDate(report.options.since)} → ${isoDate(report.options.now)}  (${report.options.windowDays} days)`,
+    report.options.since
+      ? `window            ${isoDate(report.options.since)} → ${isoDate(report.options.now)}  (${report.options.windowDays} days)`
+      : `window            lifetime — no date filter`,
   );
   lines.push(`tool_pack         ${process.env.MERGE_TOOL_PACK_ID}`);
   lines.push(`registered_user   ${process.env.MERGE_REGISTERED_USER_ID}`);
@@ -120,7 +122,8 @@ const main = async () => {
   }
 
   const opts = dumpOptions({
-    windowDays: arg("days") ? Number(arg("days")) : undefined,
+    // --lifetime drops the date filter entirely (windowDays null).
+    windowDays: arg("lifetime") !== undefined ? null : arg("days") ? Number(arg("days")) : undefined,
     connectors: (arg("connectors") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   });
 

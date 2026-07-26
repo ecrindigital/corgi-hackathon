@@ -40,15 +40,16 @@ export function condenseContext(results: ToolResult[]): string {
   return chunks.join("\n");
 }
 
-const STORY_SYSTEM = `You turn a person's real digital exhaust into a short comic.
+const STORY_SYSTEM = `You turn people's real digital exhaust into a short comic.
 
 You will receive raw data pulled from their connected accounts over a time window. Your job is to find the few genuinely memorable, funny, or quietly human moments in it, and write ONE prompt for an image-generation model that draws the whole comic as a single page.
 
 Rules for the comic you design:
 - 3 to 6 panels on one page. You choose the count and the layout.
-- ONE recurring main character, described identically every time they appear (hair, glasses, clothing, build). This is the single most important requirement: the reader must recognise the same person in every panel.
+- Describe every recurring character identically every time they appear (hair, glasses, clothing, build). This is the single most important requirement: the reader must recognise the same person in every panel.
 - Ground it in the ACTUAL data. Use real event names, real places, real people's first names, real songs, real times of day. A generic "developer has a busy week" comic is a failure.
 - Give every speech bubble its exact words. Keep them short. Demand correct spelling and clean, readable comic lettering.
+- Never use em dashes or en dashes in any lettering. Use a full stop, a comma or a colon instead. Hand lettering makes long dashes look like mistakes.
 - Warm and funny, never mean. Affectionate teasing is good; humiliation is not.
 
 PRIVACY — this is a hard constraint, not a preference. The comic is a shareable image; treat every panel as a poster on a wall.
@@ -65,10 +66,48 @@ A security or verification email may inspire a panel's SITUATION ("another sign-
 
 Output ONLY the image prompt as plain prose. No preamble, no markdown, no explanation, no quotes around it. Begin directly with the description of the comic page.`;
 
+/** One person's slice of the story input. */
+export type Cast = {
+  /** "A" / "B" — how the person is referred to in the brief. */
+  label: string;
+  context: string;
+  /** Whether a reference photo of this person will reach the illustrator. */
+  hasFace: boolean;
+};
+
+function castInstructions(cast: Cast[]): string {
+  const lines: string[] = [];
+
+  if (cast.length > 1) {
+    lines.push(
+      `This comic has TWO main characters, PERSON A and PERSON B, and their data is given separately below.`,
+      `Both must appear together in most panels. Find where their weeks actually intersect — shared events, messages between them, the same day going differently for each — and make the story about the pair, not two separate strips stitched together. If their data barely overlaps, that contrast IS the joke.`,
+      `Give each a distinct, consistent look so they are never confused for one another.`,
+    );
+  }
+
+  const faced = cast.filter((c) => c.hasFace);
+  if (faced.length) {
+    lines.push(
+      `\nREFERENCE PHOTOS: the illustrator will receive a real photo of ${
+        faced.length > 1 ? `each of ${faced.map((c) => `PERSON ${c.label}`).join(" and ")}` : `PERSON ${faced[0]!.label}`
+      }, in the order listed.`,
+      `Do NOT invent their face, hair colour, skin tone or age — instruct the illustrator to draw the person from the matching reference photo, stylised as a cartoon. Describe only what the photo cannot tell you: clothing, posture, expression, and what they are doing in each panel.`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
 /** Ask the story model for one image prompt built from the real data. */
-export async function writeComicBrief(context: string, windowDays: number): Promise<string> {
+export async function writeComicBrief(cast: Cast[], rangeLabel: string): Promise<string> {
   const key = process.env.MERGE_GATEWAY_API_KEY;
   if (!key) throw new Error("missing env: MERGE_GATEWAY_API_KEY");
+
+  const body =
+    cast.length > 1
+      ? cast.map((c) => `\n########## PERSON ${c.label} ##########\n${c.context}`).join("\n")
+      : cast[0]!.context;
 
   const res = await fetch(GATEWAY_URL, {
     method: "POST",
@@ -80,7 +119,7 @@ export async function writeComicBrief(context: string, windowDays: number): Prom
         { role: "system", content: STORY_SYSTEM },
         {
           role: "user",
-          content: `Here is my real data from the last ${windowDays} days. Design my comic.\n\n${context}`,
+          content: `Here is real data covering ${rangeLabel}. Design the comic.\n${castInstructions(cast)}\n\n${body}`,
         },
       ],
     }),
@@ -103,8 +142,14 @@ All lettering must be spelled correctly and easy to read.`;
 
 export type DrawnComic = { dataUrl: string; bytes: number; cost?: number };
 
-/** Draw the page. OpenRouter's image endpoint returns base64, not a URL. */
-export async function drawComic(prompt: string): Promise<DrawnComic> {
+/**
+ * Draw the page. OpenRouter's image endpoint returns base64, not a URL.
+ *
+ * `faces` are data URLs of the participants' photos, in the same order as the
+ * cast. gpt-image-2 uses them as character references, which is what makes the
+ * drawn person actually resemble the user instead of a generic cartoon.
+ */
+export async function drawComic(prompt: string, faces: string[] = []): Promise<DrawnComic> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("missing env: OPENROUTER_API_KEY");
 
@@ -116,6 +161,11 @@ export async function drawComic(prompt: string): Promise<DrawnComic> {
       prompt: `${prompt}${STYLE_SUFFIX}`,
       n: 1,
       size: "1024x1536",
+      ...(faces.length
+        ? {
+            input_references: faces.map((url) => ({ type: "image_url", image_url: { url } })),
+          }
+        : {}),
     }),
   });
 

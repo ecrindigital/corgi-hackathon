@@ -53,15 +53,17 @@ const CONNECTOR_META: Record<string, { label: string; emoji: string; blurb: stri
   whoop: { label: "WHOOP", emoji: "⌚", blurb: "Workouts, strain and recovery" },
   notion: { label: "Notion", emoji: "📓", blurb: "Thoughts and half-finished plans" },
   github: { label: "GitHub", emoji: "🐙", blurb: "What you built and what you broke" },
-  linkedin: {
-    label: "LinkedIn",
-    emoji: "💼",
-    // Merge's LinkedIn connector only exposes create_*_share and
-    // validate_credentials — no read tool for posts, profile or feed, so it
-    // contributes nothing to the story. Kept for the share-out path.
-    blurb: "Posting only — LinkedIn exposes no readable history",
-  },
 };
+
+/**
+ * Connectors we refuse to surface even when the Tool Pack carries them.
+ *
+ * LinkedIn's Merge connector exposes only create_*_share and
+ * validate_credentials: no read tool for posts, profile or feed. Offering it
+ * would ask someone to complete an OAuth flow that cannot contribute a single
+ * word to their comic. Re-add it the day a share-out path exists.
+ */
+const HIDDEN_CONNECTORS = new Set(["linkedin"]);
 
 /** google_drive -> "Google Drive", x -> "X" */
 function prettify(slug: string): string {
@@ -103,6 +105,52 @@ export async function createRegisteredUser(originUserId: string): Promise<string
   const id = json.registered_user_id ?? json.id;
   if (!id) throw new Error(`no registered_user_id in response: ${JSON.stringify(json)}`);
   return id as string;
+}
+
+/**
+ * Deterministic user resolution with no database.
+ *
+ * Creating a Registered User whose origin_user_id already exists fails, but the
+ * error names the existing record:
+ *
+ *   "User of origin_id: room:AB12CD:a already exists. If you'd like to update
+ *    this record, please use the PATCH /registered-users/<uuid> endpoint."
+ *
+ * Parsing an error message is not elegant, but it turns Merge into the store:
+ * the same origin_user_id always resolves to the same user, on any machine,
+ * across restarts. That is what makes shared rooms possible without persistence.
+ */
+export async function ensureRegisteredUser(originUserId: string, name?: string): Promise<string> {
+  try {
+    const json = await post("/api/v1/registered-users", {
+      origin_user_id: originUserId,
+      origin_user_name: name ?? originUserId,
+    });
+    const id = json.registered_user_id ?? json.id;
+    if (!id) throw new Error(`no registered_user_id in response: ${JSON.stringify(json)}`);
+    return id as string;
+  } catch (err) {
+    const match = /registered-users\/([0-9a-f-]{36})/i.exec((err as Error).message ?? "");
+    if (match) return match[1]!;
+    throw err;
+  }
+}
+
+export type RegisteredUserInfo = {
+  id: string;
+  origin_user_id: string;
+  authenticated_connectors: string[];
+};
+
+/** Cheaper than opening an MCP session when all you need is "what's connected?". */
+export async function getRegisteredUser(id: string): Promise<RegisteredUserInfo | null> {
+  const res = await fetch(`${API_BASE}/api/v1/registered-users/${id}`, {
+    headers: { Authorization: `Bearer ${API_KEY()}` },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as RegisteredUserInfo;
+  return { ...json, authenticated_connectors: json.authenticated_connectors ?? [] };
 }
 
 /**
@@ -221,8 +269,10 @@ const slashDate = (d: Date) => isoDate(d).replace(/-/g, "/");
  */
 const CONNECTOR_HINTS: Record<string, (field: string, opts: DumpOptions) => unknown> = {
   // `q` takes Gmail search syntax; without it we'd pull the whole mailbox
-  // newest-first instead of the requested window.
-  gmail: (field, opts) => (field === "q" ? `after:${slashDate(opts.since)}` : undefined),
+  // newest-first instead of the requested window. On "lifetime" that is exactly
+  // what we want, so leave it null and let the API return everything.
+  gmail: (field, opts) =>
+    field === "q" ? (opts.since ? `after:${slashDate(opts.since)}` : null) : undefined,
 };
 
 /** `user_id`, `userId` and `USER_ID` are the same parameter. */
@@ -250,8 +300,10 @@ function hintFor(
     const max = typeof schema?.maximum === "number" ? schema.maximum : opts.pageSize;
     return Math.min(opts.pageSize, max);
   }
-  if (DAYS_KEYS.has(n)) return opts.windowDays;
-  if (START_KEYS.has(n)) return dateValue(schema, opts.since);
+  if (DAYS_KEYS.has(n)) return opts.windowDays ?? undefined;
+  // On "lifetime" there is no lower bound — leave start fields unset so the
+  // provider returns its full history.
+  if (START_KEYS.has(n)) return opts.since ? dateValue(schema, opts.since) : undefined;
   if (END_KEYS.has(n)) return dateValue(schema, opts.now);
   if (n === "time_range" && Array.isArray(schema?.enum))
     return schema.enum.includes("short_term") ? "short_term" : schema.enum[0];
@@ -366,10 +418,20 @@ export function planFor(
 
 // ------------------------------------------------------------------- runner
 
+/** What the user picked in the UI. `lifetime` means no lower bound at all. */
+export type TimeRange = "week" | "month" | "lifetime";
+
+export const RANGE_DAYS: Record<TimeRange, number | null> = {
+  week: 7,
+  month: 30,
+  lifetime: null,
+};
+
 export type DumpOptions = {
   now: Date;
-  since: Date;
-  windowDays: number;
+  /** null on "lifetime" — no date filter is sent to any provider. */
+  since: Date | null;
+  windowDays: number | null;
   pageSize: number;
   maxChars: number;
   timeoutMs: number;
@@ -378,11 +440,19 @@ export type DumpOptions = {
 };
 
 export function dumpOptions(overrides: Partial<DumpOptions> = {}): DumpOptions {
-  const windowDays = overrides.windowDays ?? Number(process.env.CONTEXT_WINDOW_DAYS ?? 7);
+  const windowDays =
+    overrides.windowDays !== undefined
+      ? overrides.windowDays
+      : Number(process.env.CONTEXT_WINDOW_DAYS ?? 7);
   const now = overrides.now ?? new Date();
   return {
     now,
-    since: overrides.since ?? new Date(now.getTime() - windowDays * 86_400_000),
+    since:
+      overrides.since !== undefined
+        ? overrides.since
+        : windowDays === null
+          ? null
+          : new Date(now.getTime() - windowDays * 86_400_000),
     windowDays,
     pageSize: overrides.pageSize ?? Number(process.env.CONTEXT_PAGE_SIZE ?? 25),
     maxChars: overrides.maxChars ?? Number(process.env.CONTEXT_MAX_CHARS_PER_TOOL ?? 20_000),
@@ -695,7 +765,7 @@ export type DumpReport = {
   results: ToolResult[];
   skipped: { tool: string; reason: string }[];
   unauthenticated: string[];
-  options: { windowDays: number; since: string; now: string };
+  options: { windowDays: number | null; since: string | null; now: string };
 };
 
 /** Discover every tool, call the ones we safely can, and return the lot. */
@@ -747,7 +817,11 @@ export async function runDump(
         .filter((s) => !unlocked.some((u) => u.name === s.name))
         .map((s) => ({ tool: s.name, reason: s.reason })),
       unauthenticated: skips.filter((s) => s.needsAuth).map((s) => s.needsAuth!),
-      options: { windowDays: opts.windowDays, since: opts.since.toISOString(), now: opts.now.toISOString() },
+      options: {
+        windowDays: opts.windowDays,
+        since: opts.since?.toISOString() ?? null,
+        now: opts.now.toISOString(),
+      },
     };
   });
 }
@@ -775,7 +849,7 @@ export async function connectorStatus(registeredUserId: string): Promise<Connect
       if (prefix && tool.name.includes("__")) ready.set(prefix, (ready.get(prefix) ?? 0) + 1);
     }
 
-    const slugs = [...new Set([...ready.keys(), ...pending])];
+    const slugs = [...new Set([...ready.keys(), ...pending])].filter((s) => !HIDDEN_CONNECTORS.has(s));
 
     return slugs
       .map((slug) => {

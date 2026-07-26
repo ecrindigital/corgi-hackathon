@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createMagicLink } from "@/lib/merge";
-import { getRegisteredUserId } from "@/lib/session";
+import { currentRegisteredUserId } from "@/lib/room";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     if (!connector || !/^[a-z0-9_]+$/.test(connector))
       return NextResponse.json({ error: `invalid connector: ${connector}` }, { status: 400 });
 
-    const userId = await getRegisteredUserId();
+    const userId = await currentRegisteredUserId();
     return NextResponse.json(await createMagicLink(userId, connector));
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

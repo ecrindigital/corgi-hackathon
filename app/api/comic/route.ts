@@ -1,9 +1,16 @@
-import { condenseContext, drawComic, IMAGE_MODEL, STORY_MODEL, writeComicBrief } from "@/lib/comic";
-import { dumpOptions, runDump } from "@/lib/merge";
-import { getRegisteredUserId } from "@/lib/session";
+import { condenseContext, drawComic, IMAGE_MODEL, STORY_MODEL, writeComicBrief, type Cast } from "@/lib/comic";
+import { dumpOptions, RANGE_DAYS, runDump, type TimeRange } from "@/lib/merge";
+import { getFace } from "@/lib/faces";
+import { getRoom, participants, registeredUserFor } from "@/lib/room";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+const RANGE_LABEL: Record<TimeRange, string> = {
+  week: "the last 7 days",
+  month: "the last 30 days",
+  lifetime: "their whole history, with no date filter",
+};
 
 /**
  * The whole loop behind one button.
@@ -13,8 +20,8 @@ export const maxDuration = 300;
  * object; the last one carries the finished comic.
  */
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { windowDays?: number };
-  const windowDays = body.windowDays ?? 7;
+  const body = (await request.json().catch(() => ({}))) as { range?: TimeRange };
+  const range: TimeRange = body.range && body.range in RANGE_DAYS ? body.range : "week";
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -23,40 +30,86 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
 
       try {
-        send({ step: "context", message: "Reading your week…" });
-        const userId = await getRegisteredUserId();
-        const report = await runDump(userId, dumpOptions({ windowDays }));
+        const room = await getRoom();
+        const people = await participants(room);
+        const active = people.filter((p) => p.connectors.length > 0);
 
-        const used = report.results.filter((r) => r.status === "ok");
-        const sources = [...new Set(used.map((r) => r.connector))];
+        if (!active.length) {
+          send({ error: "Nobody in this room has connected a source yet." });
+          controller.close();
+          return;
+        }
 
-        if (!used.length) {
-          send({
-            error:
-              "Nothing came back from your connected sources. Connect a source, or try a longer window.",
-          });
+        const duo = active.length > 1;
+        send({
+          step: "context",
+          message: duo ? "Reading both your weeks…" : "Reading your week…",
+        });
+
+        // Both participants are read in parallel — one slow mailbox shouldn't
+        // double the wait.
+        const opts = dumpOptions({ windowDays: RANGE_DAYS[range] });
+        const reports = await Promise.all(
+          active.map(async (p) => ({
+            person: p,
+            report: await runDump(await registeredUserFor({ code: room.code, slot: p.slot }), opts),
+          })),
+        );
+
+        const cast: Cast[] = [];
+        const faces: string[] = [];
+        let totalTools = 0;
+        const sources = new Set<string>();
+
+        for (const { person, report } of reports) {
+          const used = report.results.filter((r) => r.status === "ok");
+          if (!used.length) continue;
+          totalTools += used.length;
+          for (const r of used) sources.add(r.connector);
+
+          const face = getFace(room.code, person.slot);
+          const label = person.slot.toUpperCase();
+          cast.push({ label, context: condenseContext(report.results), hasFace: Boolean(face) });
+          if (face) faces.push(face);
+        }
+
+        if (!cast.length) {
+          send({ error: "Your sources came back empty. Try a longer time range." });
           controller.close();
           return;
         }
 
         send({
           step: "context",
-          message: `Found ${used.length} pockets of your life across ${sources.length} source${sources.length > 1 ? "s" : ""}.`,
-          sources,
+          message: `Found ${totalTools} pockets of ${duo ? "your lives" : "your life"} across ${sources.size} source${sources.size > 1 ? "s" : ""}.`,
+          sources: [...sources],
         });
 
-        send({ step: "story", message: "Deciding which moments deserve a panel…" });
-        const brief = await writeComicBrief(condenseContext(report.results), windowDays);
+        send({
+          step: "story",
+          message: duo
+            ? "Finding where your two weeks collide…"
+            : "Deciding which moments deserve a panel…",
+        });
+        const brief = await writeComicBrief(cast, RANGE_LABEL[range]);
 
-        send({ step: "draw", message: "Inking the page — this is the slow bit, ~2 minutes." });
-        const drawn = await drawComic(brief);
+        send({
+          step: "draw",
+          message: faces.length
+            ? "Inking the page, with your face in it. This is the slow part, about two minutes."
+            : "Inking the page. This is the slow part, about two minutes.",
+        });
+        const drawn = await drawComic(brief, faces);
 
         send({
           done: true,
           image: drawn.dataUrl,
           brief,
-          sources,
-          toolsUsed: used.length,
+          sources: [...sources],
+          toolsUsed: totalTools,
+          people: cast.length,
+          faces: faces.length,
+          range,
           cost: drawn.cost,
           models: { story: STORY_MODEL, image: IMAGE_MODEL },
         });
@@ -69,9 +122,6 @@ export async function POST(request: Request) {
   });
 
   return new Response(stream, {
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
+    headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
   });
 }

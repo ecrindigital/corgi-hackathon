@@ -1,40 +1,226 @@
 @import "tailwindcss";
 
-@theme {
-  --color-paper: #fdf6e3;
-  --color-ink: #14110f;
-  --color-pop: #ff4d6d;
-  --color-sky: #4cc9f0;
-  --color-sun: #ffd166;
-  --color-mint: #06d6a0;
-  --color-grape: #9b5de5;
-
-  --font-display: var(--font-display), system-ui, sans-serif;
-  --font-body: var(--font-body), system-ui, sans-serif;
-}
-
 /*
- * The comic look is three things: a hard black outline, a solid offset shadow
- * instead of a blur, and a paper-coloured ground. Everything else is layout.
+ * F37 Bolton is a licensed face and is not bundled. Drop the file at
+ * public/fonts/f37-bolton.woff2 and it takes over automatically; until then the
+ * stack falls through to Inter Tight, the closest free grotesque in width and
+ * tracking. Nothing breaks either way.
  */
-@utility panel {
-  border: 3px solid var(--color-ink);
-  border-radius: 0.9rem;
-  box-shadow: 6px 6px 0 var(--color-ink);
+@font-face {
+  font-family: "F37 Bolton";
+  src: url("/fonts/f37-bolton.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
 }
 
-@utility panel-sm {
-  border: 2px solid var(--color-ink);
-  border-radius: 0.7rem;
-  box-shadow: 3px 3px 0 var(--color-ink);
+@theme {
+  --color-ink: #191919;
+  --color-body: #4a4a4a;
+  --color-primary: #ff5c00;
+  --color-line: #e1e1e1;
+  --color-surface: #ffffff;
+  --color-subtle: #fafafa;
+
+  --font-display: "F37 Bolton", var(--font-display-fallback), sans-serif;
+  --font-body: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+
+  --tracking-title: -0.032rem;
+  --tracking-body: -0.015em;
+
+  /* Entering or exiting the screen. */
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  /* Something already on screen moving to a new place. */
+  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background-color: var(--color-paper);
-  /* halftone dots — the cheapest way to say "printed comic" */
-  background-image: radial-gradient(rgba(20, 17, 15, 0.13) 1px, transparent 1px);
-  background-size: 22px 22px;
-  background-position: -11px -11px;
-  color: var(--color-ink);
+  background: var(--color-surface);
+  color: var(--color-body);
   font-family: var(--font-body);
+  letter-spacing: var(--tracking-body);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-title);
+}
+
+button:not(:disabled),
+summary,
+[role="button"]:not([aria-disabled="true"]),
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+/* One hairline, one radius, one surface: every card in the product is this. */
+@utility card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+}
+
+/* Lift only where a pointer can actually hover; touch fakes it on tap. */
+@utility card-interactive {
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease;
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      border-color: var(--color-ink);
+      transform: translateY(-1px);
+    }
+  }
+}
+
+/* ----------------------------------------------------------------- buttons */
+
+@utility btn {
+  border-radius: 12px;
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-title);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease,
+    transform 100ms ease;
+
+  /* The cheapest way to make a button feel physical. */
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+@utility btn-primary {
+  background: var(--color-primary);
+  color: var(--color-surface);
+  border: 1px solid var(--color-primary);
+}
+@utility btn-primary-hover {
+  &:hover:not(:disabled) {
+    background: #e65200;
+    border-color: #e65200;
+  }
+}
+
+@utility btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  &:hover:not(:disabled) {
+    border-color: var(--color-ink);
+  }
+}
+
+/* -------------------------------------------------------------- animations */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The payoff. Rare enough to earn a longer curve than the rest of the UI. */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Sweeps once across a panel as it fills, so "working" reads as motion. */
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
+@utility rise {
+  animation: rise 280ms var(--ease-out-cubic) both;
+}
+
+@utility pop {
+  animation: pop 200ms var(--ease-out-cubic) both;
+}
+
+@utility reveal {
+  animation: reveal 420ms var(--ease-out-quart) both;
+}
+
+@utility breathe {
+  animation: breathe 1800ms ease-in-out infinite;
+}
+
+@utility sweep {
+  animation: sweep 1600ms var(--ease-in-out-cubic) infinite;
+  will-change: transform;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/*
+ * Blanket kill switch. Utility classes outrank a bare `*` selector, so this is
+ * the one place !important earns its keep: without it a single Tailwind
+ * animate-* class would survive the user's preference.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
