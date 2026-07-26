@@ -6,11 +6,30 @@ Living notes for the team. Update this file as decisions change.
 
 ### Confirmed
 
-- The product generates a personal comic from the user's real digital context and a reference selfie.
+- Product name: **Toonback**
+- The product generates a personal comic from the user's real digital context and a reference photo. Prefer a clear full-body photo so the model can reproduce the character's face, body, clothing, and silhouette consistently; accept a selfie as fallback.
+- The character photo uses direct device upload. Do not build Google Photos, Apple Photos, or PhotoKit integration for the hackathon.
 - After one-time setup, the ideal experience is one click: **Create my comic → finished comic image**.
 - Comic quality is the core work: a story that makes sense, attractive comic art, readable dialogue, a coherent style, and the same recognizable cartoon character across panels.
 - The interface should feel playful and cartoon-like, matching the generated comic rather than looking like a corporate AI dashboard.
 - The model decides the story, panel count, layout, dialogue, and visual direction. The product does not expose reasoning or add storyboard, layout, or caption-editing systems.
+- The default period is the user's last seven days. Other periods are deferred.
+- Generate only when the connected sources contain enough real material. If they do not, ask the user to connect another source rather than producing a generic comic.
+- The default tone is funny, warm, slightly chaotic, and affectionate—never corporate, motivational, or mean.
+- Light self-deprecating humor is allowed. Cruelty, humiliation, appearance jokes, and jokes about sensitive topics are not.
+- Do not invent major facts. Comedic exaggeration is allowed in reactions, dialogue, and visual situations.
+- Exclude financial, health, romantic, work-confidential, and deeply personal material by default.
+- When other people appear, use first names only when necessary. Do not expose direct private quotations, contact details, or confidential information.
+- The result screen shows small icons for the sources that contributed, without exposing logs, reasoning, or retrieved raw data.
+- Use one recognizable signature comic style. The model may choose the story, layout, and panel count within that style.
+- Generate dialogue and captions inside the finished image. There is no user-facing text or comic editor.
+- The result actions are **Download**, **Share**, and **Try again**.
+- Do not permanently store raw personal context or the uploaded character photo. Retain data only as required for generation.
+- Generated comics remain temporary unless the user explicitly chooses **Create share link**. After warning that anyone with the link can view the comic, upload only the finished image to public Vercel Blob using an unguessable randomized pathname.
+- For the hackathon, share the direct Vercel Blob URL. Do not add a database, branded share page, authenticated sharing, or automatic persistence.
+- During setup, clearly disclose that selected personal data and the uploaded photo are sent to AI providers to generate the comic.
+- Never silently mix fixture or invented data into a real user's comic. Seeded data exists only in an explicitly identified demo mode.
+- Product promise: **Your life, drawn.** Supporting line: **Connect your digital life and turn your week into a comic.**
 - Merge is the primary sponsor integration. The product should be able to use multiple personal connectors rather than being designed around one provider.
 - Offer all useful personal Connectors supported by Merge rather than choosing a three-Connector demo product. The user may authenticate any subset.
 - Each third-party Connector requires separate user authentication. Merge centralizes the UI, credential storage, token refresh, and tool access, but it cannot bypass provider consent.
@@ -71,7 +90,7 @@ Everything else can wait until the end-to-end comic works.
 
 ## Product idea
 
-Working concept: **click a button and receive a comic about your life**.
+**Toonback**: click a button and receive a comic about your life.
 
 The comic could cover the last week, last month, a particular event, or eventually any chosen period. It uses the person's digital context to find memorable, funny, or emotional moments and turns the person into a recurring cartoon character.
 
@@ -86,13 +105,14 @@ Possible uses:
 
 > Connect the fragmented pieces of your digital life. We turn them into one story—your week as a comic.
 
-Likely first experience:
+First experience:
 
 1. Connect personal data sources.
-2. Choose a time period, initially "last week."
-3. Upload a selfie for the comic character.
+2. Review the short AI/data-use disclosure.
+3. Upload a clear full-body photo for the comic character.
 4. Click **Create my comic**.
 5. Receive one finished comic image.
+6. Download, share, or try again.
 
 The result should feel specifically recognizable to the user, not like a generic summary with their name inserted.
 
@@ -121,7 +141,10 @@ Useful Agent Handler connectors:
 
 Important limitations and implementation notes:
 
-- No direct Google Photos, Apple Photos, iMessage, or WhatsApp connector has been identified.
+- Merge Agent Handler currently has no direct Google Photos or Apple Photos connector.
+- Google Photos could be added separately with Google's Picker API, which lets the user explicitly select photos. It does not provide automatic access to the user's entire library.
+- Apple provides PhotoKit access to Photos/iCloud Photos through native Apple-platform apps, not a comparable server-side web connector. For this web hackathon app, the practical Apple Photos flow is the normal file/photo picker so the user manually selects an image.
+- No direct iMessage or WhatsApp history connector has been identified.
 - The user must authenticate each Connector separately through Merge Link or Magic Link. This includes separate Gmail, Google Calendar, and Google Drive Connector credentials even when the same Google account is used.
 - Merge stores the resulting credential against the user's Merge Registered User and handles subsequent authenticated calls and token refreshes.
 - Merge Link can show all configured Connectors in one picker, but selecting one still starts that provider's individual authentication flow.
@@ -192,16 +215,17 @@ Photon is currently optional. It should not delay the core comic-generation loop
 Core demo:
 
 - Connect any available personal sources through Merge
-- Select "last week"
-- Upload one selfie
+- Use the default "last seven days" period
+- Upload one clear full-body character-reference photo
 - Generate one coherent comic image
 - Display and download/share the result
 
 Graceful fallback:
 
 - Generate from any successfully connected source
-- Clearly show which sources contributed
-- Use seeded demo data if live OAuth or an external API fails during judging
+- Ask for another connection if the available context is insufficient
+- Clearly show which sources contributed using small source icons
+- Keep a clearly labeled seeded demo mode available if live OAuth or an external API fails during judging
 
 Explicitly out of scope unless the core loop is already reliable:
 
@@ -219,6 +243,7 @@ Explicitly out of scope unless the core loop is already reliable:
 - Image generation is slow or produces inconsistent characters
 - Too much raw context makes story selection generic
 - Email contains sensitive information that should not appear unexpectedly
+- The comic exposes private details about other people
 - Live data is boring during the demo
 - One failed connector blocks the whole experience
 - Generated text inside images is misspelled or unreadable
@@ -230,6 +255,7 @@ Possible mitigations:
 - Prepare a strong, consented demo account or fixture
 - Test comic prompts repeatedly against the same reference person
 - Keep a known-good prompt and generated fallback image for the demo
+- Apply the accepted sensitive-content exclusions before sending context to the image model
 
 ## Minimal architecture
 
@@ -240,7 +266,9 @@ Browser
   - connect sources
   - upload selfie
   - one Create my comic button
-  - display returned image
+- display returned image
+  - show contributing-source icons
+  - download, share, or try again
         |
         v
 POST /api/comic
@@ -271,6 +299,7 @@ Build one full-stack TypeScript application:
 | AI integration | Vercel AI SDK |
 | Context model | Best suitable model available through existing accounts or the $20 Merge Gateway credit |
 | Image generation | Best reference-image model from a short quality comparison |
+| Explicitly shared comics | Public Vercel Blob with randomized pathnames |
 | Deployment | Vercel |
 
 Why this stack:
@@ -286,6 +315,7 @@ Minimal package set:
 next react react-dom
 ai @ai-sdk/mcp
 @mergeapi/react-agent-handler-link
+@vercel/blob
 ```
 
 Use AI SDK for Merge MCP calls and model access. Give the context agent a curated read-only tool selection from authenticated connectors, then pass its bounded findings and the selfie to the selected image model for one comic-generation call. Add only the provider package required by the winning image model.
@@ -300,20 +330,23 @@ Resize/compress the selfie in the browser. Prefer returning a model-hosted image
 
 - No application login: create one anonymous Merge Registered User and keep its ID in an HTTP-only cookie.
 - No database: Merge stores connector credentials; keep the current comic in browser memory.
-- No object storage: return the generated image as a data URL and let the browser download it.
+- Do not permanently store the character photo or retrieved personal context.
+- Keep generated images in browser memory by default. Upload only the finished comic to public Vercel Blob when the user explicitly creates a share link.
+- Use a randomized Blob pathname and disclose that anyone with the link can view the shared comic.
 - No job queue: run one generation request with a visible progress state.
 - One Tool Pack containing a small read-only tool subset from each useful personal connector.
 - Let the image model decide the comic's story, panel count, layout, and dialogue.
 - Return the model's finished comic image without reconstructing it in the app.
 - Keep one context fixture and known-good comic for development and demo fallback.
+- Expose fixture data only through a clearly labeled demo mode; never silently use it for a real user.
 
 Add persistence, background jobs, object storage, and full user accounts only after the core demo works.
 
 ## Deferred until the core works
 
-- Final name and broader visual identity
+- Broader visual identity beyond the confirmed playful, cartoon-like direction
 - Photon delivery
 - Arbitrary or entire-life date ranges
 - More than one comic format
-- Editing and regeneration controls
+- Editing controls
 - Accounts, persistent storage, history, and social features
