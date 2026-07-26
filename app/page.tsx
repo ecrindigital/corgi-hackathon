@@ -13,7 +13,6 @@ const Corgi3D = dynamic(() => import("@/components/corgi-3d").then((m) => m.Corg
 type Connector = {
   slug: string;
   label: string;
-  emoji: string;
   blurb: string;
   connected: boolean;
   toolCount: number;
@@ -43,7 +42,7 @@ type Phase = "welcome" | "connect" | "create" | "result";
 const RANGES: { id: TimeRange; label: string; hint: string }[] = [
   { id: "week", label: "Last week", hint: "7 days" },
   { id: "month", label: "Last month", hint: "30 days" },
-  { id: "lifetime", label: "Everything", hint: "no date filter" },
+  { id: "lifetime", label: "Lifetime", hint: "Your entire life" },
 ];
 
 /** Entrance stagger. Small enough to read as one gesture, not a queue. */
@@ -210,7 +209,7 @@ export default function Home() {
 
   if (phase === "result" && comic) {
     return (
-      <Shell>
+      <Shell onHome={() => setPhase("welcome")}>
         <div className="mx-auto max-w-3xl px-6 py-14">
           <div className="rise" style={delay(0)}>
             <Eyebrow>{RANGES.find((r) => r.id === comic.range)?.label ?? comic.range}</Eyebrow>
@@ -227,7 +226,7 @@ export default function Home() {
           {/* eslint-disable-next-line @next/next/no-img-element -- data: URL, nothing for next/image to optimise */}
           <img
             src={comic.image}
-            alt="Your week as a comic"
+            alt="Your life as a comic"
             className="reveal mt-8 w-full rounded-xl border border-edge"
             style={delay(2)}
           />
@@ -325,8 +324,8 @@ export default function Home() {
 
   if (phase === "welcome") {
     return (
-      <Shell>
-        <div className="mx-auto flex min-h-[calc(100dvh-57px)] max-w-3xl flex-col justify-center px-6 py-14">
+      <Shell onHome={() => setPhase("welcome")}>
+        <div className="mx-auto flex min-h-[calc(100dvh-57px)] max-w-3xl flex-col justify-center px-6 py-6 sm:py-8">
           <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:items-center sm:gap-6">
             <h1 className="rise text-5xl leading-[1.05] sm:text-7xl" style={delay(0)}>
               Your week,
@@ -334,21 +333,21 @@ export default function Home() {
               <span className="text-orange">drawn.</span>
             </h1>
 
-            <Corgi3D className="pop size-40 shrink-0 sm:size-56" />
+            <Corgi3D className="pop size-36 shrink-0 sm:size-48" />
           </div>
 
-          <p className="rise mt-6 max-w-lg text-lg" style={delay(1)}>
+          <p className="rise mt-4 max-w-lg text-lg" style={delay(1)}>
             Your life is scattered across a dozen apps. Toonback reads it and turns it into a comic. One
             page, your story, nobody else&apos;s.
           </p>
 
-          <ol className="mt-10 max-w-lg divide-y divide-edge border-y border-edge">
+          <ol className="mt-6 max-w-lg divide-y divide-edge border-y border-edge">
             {[
               ["Connect", "Plug in the accounts you want it to read."],
               ["Add your face", "Optional, alone or with someone else."],
               ["Press one button", "About a minute later, your page is drawn."],
             ].map(([title, detail], i) => (
-              <li key={title} className="rise flex gap-4 py-4" style={delay(2 + i)}>
+              <li key={title} className="rise flex gap-4 py-2.5" style={delay(2 + i)}>
                 <span className="w-5 shrink-0 font-black text-sm text-orange">
                   {i + 1}
                 </span>
@@ -363,7 +362,7 @@ export default function Home() {
           <div className="rise" style={delay(5)}>
             <button
               onClick={() => setPhase("connect")}
-              className="btn btn-primary mt-10 px-8 py-3.5 text-lg"
+              className="btn btn-primary mt-6 px-8 py-3.5 text-lg"
             >
               Get started
             </button>
@@ -377,7 +376,7 @@ export default function Home() {
 
   if (phase === "connect") {
     return (
-      <Shell step="1 of 2" room={status?.room}>
+      <Shell step="1 of 2" room={status?.room} onHome={() => setPhase("welcome")}>
         <div className="mx-auto max-w-4xl px-6 py-14">
           <div className="rise" style={delay(0)}>
             <Eyebrow>Sources</Eyebrow>
@@ -403,9 +402,7 @@ export default function Home() {
                   }`}
                   style={delay(1 + i)}
                 >
-                  <span className="text-xl" aria-hidden>
-                    {c.emoji}
-                  </span>
+                  <ConnectorLogo connector={c} />
 
                   <div className="min-w-0 flex-1">
                     <h2 className={`text-base ${c.connected ? "text-card" : ""}`}>{c.label}</h2>
@@ -500,10 +497,8 @@ export default function Home() {
 
   // ------------------------------------------------------------------ create
 
-  const rangeIndex = RANGES.findIndex((r) => r.id === range);
-
   return (
-    <Shell step="2 of 2" room={status?.room}>
+    <Shell step="2 of 2" room={status?.room} onHome={() => setPhase("welcome")}>
       <div className="mx-auto max-w-2xl px-6 py-14">
         <div className="rise" style={delay(0)}>
           <Eyebrow>Ready</Eyebrow>
@@ -520,27 +515,14 @@ export default function Home() {
         <div className="rise mt-6" style={delay(2)}>
           <Eyebrow>How far back</Eyebrow>
 
-          {/*
-           * The pill is already on screen and travels to a new position, which
-           * is the one case the blueprint calls for ease-in-out.
-           */}
-          <div className="relative mt-3 grid grid-cols-3 gap-1 rounded-xl border border-edge p-1 sm:inline-grid sm:w-auto">
-            <span
-              className="absolute inset-y-1 left-1 rounded-lg bg-orange transition-transform duration-[260ms] ease-[var(--ease-in-out-cubic)]"
-              style={{
-                width: `calc((100% - 0.5rem) / 3)`,
-                transform: `translateX(calc(${rangeIndex} * (100% + 0.25rem)))`,
-                willChange: "transform",
-              }}
-              aria-hidden
-            />
+          <div className="relative mt-3 grid grid-cols-3 gap-1 rounded-xl border border-edge p-2 sm:inline-grid sm:w-auto">
             {RANGES.map((r) => (
               <button
                 key={r.id}
                 onClick={() => setRange(r.id)}
                 aria-pressed={range === r.id}
-                className={`btn relative z-10 px-3 py-2 text-center text-sm transition-colors duration-200 ${
-                  range === r.id ? "text-card" : "text-muted hover:text-fg"
+                className={`btn px-3 py-2 text-center text-sm transition-colors duration-200 ${
+                  range === r.id ? "bg-orange text-card" : "text-muted hover:text-fg"
                 }`}
               >
                 {r.label}
@@ -608,32 +590,31 @@ export default function Home() {
 
 /* -------------------------------------------------------------------------- */
 
-function Shell({ children, step, room }: { children: React.ReactNode; step?: string; room?: string }) {
+function Shell({
+  children,
+  step,
+  room,
+  onHome,
+}: {
+  children: React.ReactNode;
+  step?: string;
+  room?: string;
+  onHome: () => void;
+}) {
   return (
     <>
-      {/*
-       * The dithered gradient carries the printed-comic texture into an
-       * otherwise very clean interface. It is masked back to the top-right
-       * corner: run full bleed it reads as texture under the paragraphs and
-       * costs more legibility than it buys character.
-       */}
-      {/*
-       * Two dither layers. An even film of grain over the whole page gives the
-       * cream a printed tooth, and a denser corner gradient anchors the hero.
-       * Both are the same ordered dither, just different density functions.
-       */}
-      <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.22]">
-        <Dither pixelSize={2} shape="grain" intensity={0.16} />
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.16] [mask-image:radial-gradient(100%_80%_at_100%_0%,black_0%,transparent_62%)]">
+        <Dither pixelSize={2} intensity={0.35} />
       </div>
-      <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.45] [mask-image:radial-gradient(120%_100%_at_100%_0%,black_0%,black_14%,transparent_62%)]">
-        <Dither pixelSize={2} intensity={0.5} />
+      <div className="pointer-events-none fixed inset-0 -z-10 rotate-180 opacity-[0.16] [mask-image:radial-gradient(100%_80%_at_100%_0%,black_0%,transparent_62%)]">
+        <Dither pixelSize={2} intensity={0.35} />
       </div>
 
       <header className="sticky top-0 z-10 border-b border-edge bg-card/85 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-          <span className="font-black text-fg">
+          <button onClick={onHome} className="font-black text-fg">
             Toonback<span className="text-orange">.</span>
-          </span>
+          </button>
           <span className="text-xs text-muted">
             {room && <span className="mr-3 font-mono tracking-widest">{room}</span>}
             {step}
@@ -658,6 +639,38 @@ function Notice({ children }: { children: React.ReactNode }) {
     <p className="pop mt-6 rounded-xl border border-orange/50 bg-orange/10 px-4 py-3 text-sm text-fg">
       {children}
     </p>
+  );
+}
+
+const CONNECTOR_LOGOS: Record<string, string> = {
+  gmail: "https://cdn.simpleicons.org/gmail",
+  google_calendar: "https://cdn.simpleicons.org/googlecalendar",
+  google_drive: "https://cdn.simpleicons.org/googledrive",
+  google_maps: "https://cdn.simpleicons.org/googlemaps",
+  x: "https://cdn.simpleicons.org/x",
+  spotify: "https://cdn.simpleicons.org/spotify",
+  oura: "https://api.iconify.design/arcticons:oura.svg",
+  whoop: "https://api.iconify.design/arcticons:whoop.svg",
+  notion: "https://cdn.simpleicons.org/notion",
+  github: "https://cdn.simpleicons.org/github",
+  imessage: "https://cdn.simpleicons.org/imessage",
+};
+
+function ConnectorLogo({ connector }: { connector: Connector }) {
+  const logo = CONNECTOR_LOGOS[connector.slug];
+
+  return (
+    <span
+      className="grid size-9 shrink-0 place-items-center rounded-lg border border-edge bg-card p-2 font-black text-fg"
+      aria-hidden
+    >
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- small third-party brand marks
+        <img src={logo} alt="" className="size-full object-contain" />
+      ) : (
+        connector.label.charAt(0)
+      )}
+    </span>
   );
 }
 

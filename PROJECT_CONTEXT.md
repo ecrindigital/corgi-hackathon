@@ -103,7 +103,7 @@ Possible uses:
 
 ## Current product framing
 
-> Connect the fragmented pieces of your digital life. We turn them into one story—your week as a comic.
+> Connect the fragmented pieces of your digital life. We turn them into one story—your life as a comic.
 
 First experience:
 

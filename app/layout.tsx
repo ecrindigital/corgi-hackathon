@@ -10,7 +10,7 @@ const fallback = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "Toonback, your week as a comic",
+  title: "Toonback, your life as a comic",
   description: "Connect the scattered pieces of your digital life. We turn them into one story.",
 };
 
