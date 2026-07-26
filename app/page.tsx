@@ -78,6 +78,12 @@ export default function Home() {
    */
   const connect = useCallback(
     async (slug: string) => {
+      const popup = window.open("", "merge-link", "width=520,height=760");
+      if (!popup) {
+        setStatusError("Popup blocked. Allow popups for this site and try again.");
+        return;
+      }
+
       setConnecting(slug);
       try {
         const res = await fetch("/api/connect", {
@@ -88,7 +94,7 @@ export default function Home() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? res.statusText);
 
-        const popup = window.open(json.url, "merge-link", "width=520,height=760");
+        popup.location.href = json.url;
 
         if (pollRef.current) clearInterval(pollRef.current);
         const started = Date.now();
@@ -104,6 +110,7 @@ export default function Home() {
           }
         }, 2500);
       } catch (err) {
+        popup.close();
         setStatusError((err as Error).message);
         setConnecting(null);
       }
