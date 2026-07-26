@@ -91,7 +91,13 @@ export function FaceUpload({ onChange }: { onChange?: (hasFace: boolean) => void
             disabled={busy}
             className="btn btn-secondary shrink-0 px-4 py-2 text-sm disabled:opacity-50"
           >
-            {busy ? <span className="breathe">Resizing</span> : "Add a photo"}
+            {busy ? (
+              <span className="flex items-center gap-2">
+                <span className="spinner" /> Saving photo…
+              </span>
+            ) : (
+              "Add a photo"
+            )}
           </button>
         )}
       </div>

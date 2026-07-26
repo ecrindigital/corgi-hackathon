@@ -56,7 +56,8 @@ export function ContextInput({
 }) {
   const [items, setItems] = useState<ContextItemSummary[]>([]);
   const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<"text" | "files" | null>(null);
   const [dragging, setDragging] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,11 +68,15 @@ export function ContextInput({
     if (!response.ok) throw await errorFrom(response);
     const json = (await response.json()) as { items: ContextItemSummary[] };
     setItems(json.items);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial server-backed list
-    loadItems().catch((err) => setError((err as Error).message));
+    loadItems().catch((err) => {
+      setLoading(false);
+      setError((err as Error).message);
+    });
   }, [loadItems]);
 
   const finish = useCallback(
@@ -94,7 +99,7 @@ export function ContextInput({
 
   const addValue = useCallback(async () => {
     if (!value.trim()) return;
-    setBusy(true);
+    setBusy("text");
     setError(null);
     setMessage("Reading context…");
     try {
@@ -109,7 +114,7 @@ export function ContextInput({
       setMessage(null);
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }, [finish, value]);
 
@@ -155,7 +160,7 @@ export function ContextInput({
   const addFiles = useCallback(
     async (files: File[]) => {
       if (!files.length) return;
-      setBusy(true);
+      setBusy("files");
       setError(null);
       try {
         for (const file of files) await uploadOne(file);
@@ -163,7 +168,7 @@ export function ContextInput({
         setMessage(null);
         setError((err as Error).message);
       } finally {
-        setBusy(false);
+        setBusy(null);
         if (inputRef.current) inputRef.current.value = "";
       }
     },
@@ -207,10 +212,16 @@ export function ContextInput({
         />
         <button
           onClick={addValue}
-          disabled={busy || !value.trim()}
+          disabled={Boolean(busy) || !value.trim()}
           className="btn btn-primary self-stretch px-5 py-2.5 text-sm disabled:opacity-40 sm:self-end"
         >
-          Add context
+          {busy === "text" ? (
+            <span className="flex items-center gap-2">
+              <span className="spinner" /> Adding…
+            </span>
+          ) : (
+            "Add context"
+          )}
         </button>
       </div>
 
@@ -228,12 +239,19 @@ export function ContextInput({
           setDragging(false);
           addFiles([...event.dataTransfer.files]);
         }}
-        disabled={busy}
+        disabled={Boolean(busy)}
         className={`mt-3 w-full rounded border-2 border-dashed px-4 py-4 text-center text-sm font-black transition-colors ${
           dragging ? "border-orange bg-yellow/30" : "border-fg bg-page hover:bg-yellow/15"
         } disabled:opacity-50`}
       >
-        {busy ? "Working…" : "Drop files here or choose files"}
+        {busy === "files" ? (
+          <span className="flex items-center justify-center gap-2">
+            <span className="spinner" />
+            {message ?? "Preparing files…"}
+          </span>
+        ) : (
+          "Drop files here or choose files"
+        )}
       </button>
       <input
         ref={inputRef}
@@ -244,7 +262,12 @@ export function ContextInput({
         onChange={(event) => addFiles([...(event.target.files ?? [])])}
       />
 
-      {items.length > 0 && (
+      {loading ? (
+        <div className="mt-4 space-y-3 border-y border-edge py-3" role="status" aria-label="Loading added context">
+          <div className="skeleton h-9 rounded" />
+          <div className="skeleton h-9 rounded" />
+        </div>
+      ) : items.length > 0 && (
         <ul className="mt-4 divide-y divide-edge border-y border-edge">
           {items.map((item) => (
             <li key={item.id} className="flex items-center gap-3 py-2.5 text-sm">
@@ -272,7 +295,11 @@ export function ContextInput({
         </ul>
       )}
 
-      {message && <p className="mt-3 text-sm text-muted">{message}</p>}
+      {message && !busy && (
+        <p className="mt-3 text-sm text-muted" aria-live="polite">
+          {message}
+        </p>
+      )}
       {error && <p className="mt-3 text-sm text-orange">{error}</p>}
     </section>
   );

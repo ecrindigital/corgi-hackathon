@@ -108,7 +108,11 @@ export function ComicActions({ dataUrl, filename }: { dataUrl: string; filename:
 
       {support !== "none" && (
         <button onClick={send} disabled={state === "working"} className="btn btn-secondary px-6 py-3">
-          {state === "copied" ? (
+          {state === "working" ? (
+            <span className="flex items-center gap-2">
+              <span className="spinner" /> Preparing…
+            </span>
+          ) : state === "copied" ? (
             <span className="pop inline-block">Copied to clipboard</span>
           ) : support === "share" ? (
             "Send it to someone"
@@ -138,7 +142,13 @@ export function ComicActions({ dataUrl, filename }: { dataUrl: string; filename:
           disabled={shareState === "working"}
           className="btn btn-secondary px-6 py-3 disabled:opacity-50"
         >
-          {shareState === "working" ? "Creating link…" : "Create share link"}
+          {shareState === "working" ? (
+            <span className="flex items-center gap-2">
+              <span className="spinner" /> Creating link…
+            </span>
+          ) : (
+            "Create share link"
+          )}
         </button>
       )}
 

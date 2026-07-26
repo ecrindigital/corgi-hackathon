@@ -169,7 +169,7 @@ export default function Home() {
   const createComic = useCallback(async () => {
     setBusy(true);
     setError(null);
-    setProgress([]);
+    setProgress(["Starting the presses…"]);
 
     try {
       const res = await fetch(`/api/comic${devMode ? "?dev=true" : ""}`, {
@@ -218,6 +218,12 @@ export default function Home() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [devMode, status]);
+
+  const openCreate = () => {
+    setProgress([]);
+    setError(null);
+    setPhase("create");
+  };
 
   const connected = status?.connectors.filter((c) => c.connected) ?? [];
   const mine = status?.participants.find((p) => p.isYou);
@@ -274,10 +280,16 @@ export default function Home() {
                 disabled={busy}
                 className="btn btn-secondary px-5 py-2.5 text-sm disabled:opacity-50"
               >
-                {busy ? <span className="breathe">Drawing</span> : "Same story, new take"}
+                {busy ? (
+                  <span className="flex items-center gap-2">
+                    <span className="spinner" /> Drawing a new take…
+                  </span>
+                ) : (
+                  "Same story, new take"
+                )}
               </button>
               <button
-                onClick={() => setPhase("create")}
+                onClick={openCreate}
                 className="btn btn-secondary px-5 py-2.5 text-sm"
               >
                 Change the period or my face
@@ -291,13 +303,13 @@ export default function Home() {
             </div>
 
             {busy && (
-              <ol className="mt-5 divide-y divide-edge border-y border-edge">
+              <ol className="mt-5 divide-y divide-edge border-y border-edge" aria-live="polite">
                 {progress.map((line, i) => {
                   const current = i === progress.length - 1;
                   return (
                     <li key={i} className="rise flex items-center gap-3 py-2.5 text-sm">
                       <span
-                        className={`size-1.5 shrink-0 rounded-full ${current ? "breathe bg-orange" : "bg-line"}`}
+                        className={`shrink-0 ${current ? "spinner text-orange" : "size-2 rounded-full bg-fg"}`}
                         aria-hidden
                       />
                       <span className={current ? "text-fg" : ""}>{line}</span>
@@ -418,58 +430,65 @@ export default function Home() {
 
           {error && <Notice>{error}</Notice>}
 
-          {status && (
-            <ContextInput room={status.room} slot={status.slot} onChange={() => loadStatus()} />
-          )}
-
           {!status && !error ? (
-            <ConnectorSkeleton />
+            <ConnectSkeleton />
           ) : (
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              {status?.connectors.map((c, i) => (
-                <article
-                  key={c.slug}
-                  className={`rise flex items-start gap-4 rounded-xl border p-5 transition-colors duration-200 ${
-                    c.connected
-                      ? "border-orange bg-orange text-card"
-                      : "card card-interactive"
-                  }`}
-                  style={delay(1 + i)}
-                >
-                  <ConnectorLogo connector={c} />
+            <>
+              {status && (
+                <ContextInput room={status.room} slot={status.slot} onChange={() => loadStatus()} />
+              )}
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                {status?.connectors.map((c, i) => (
+                  <article
+                    key={c.slug}
+                    className={`rise flex items-start gap-4 rounded-xl border p-5 transition-colors duration-200 ${
+                      c.connected
+                        ? "border-orange bg-orange text-card"
+                        : "card card-interactive"
+                    }`}
+                    style={delay(1 + i)}
+                  >
+                    <ConnectorLogo connector={c} />
 
-                  <div className="min-w-0 flex-1">
-                    <h2 className={`text-base ${c.connected ? "text-card" : ""}`}>{c.label}</h2>
-                    {c.blurb && (
-                      <p className={`mt-1 text-sm ${c.connected ? "text-card/85" : ""}`}>{c.blurb}</p>
-                    )}
-                  </div>
-
-                  {c.connected ? (
-                    // Mounts the moment polling sees the credential land. The
-                    // pop is the only confirmation the popup ever gives you.
-                    <span className="pop flex shrink-0 items-center gap-2 text-sm text-card">
-                      <span className="size-2 rounded-full bg-card" aria-hidden />
-                      {c.toolCount} tools
-                    </span>
-                  ) : !c.inPack ? (
-                    <span className="shrink-0 text-sm text-muted">Needs access</span>
-                  ) : (
-                    <button
-                      onClick={() => connect(c.slug)}
-                      disabled={connecting === c.slug}
-                      className="btn btn-secondary shrink-0 px-4 py-2 text-sm disabled:opacity-50"
-                    >
-                      {connecting === c.slug ? (
-                        <span className="breathe">Waiting</span>
-                      ) : (
-                        "Connect"
+                    <div className="min-w-0 flex-1">
+                      <h2 className={`text-base ${c.connected ? "text-card" : ""}`}>
+                        {c.label}
+                      </h2>
+                      {c.blurb && (
+                        <p className={`mt-1 text-sm ${c.connected ? "text-card/85" : ""}`}>
+                          {c.blurb}
+                        </p>
                       )}
-                    </button>
-                  )}
-                </article>
-              ))}
-            </div>
+                    </div>
+
+                    {c.connected ? (
+                      // Mounts the moment polling sees the credential land. The
+                      // pop is the only confirmation the popup ever gives you.
+                      <span className="pop flex shrink-0 items-center gap-2 text-sm text-card">
+                        <span className="size-2 rounded-full bg-card" aria-hidden />
+                        {c.toolCount} tools
+                      </span>
+                    ) : !c.inPack ? (
+                      <span className="shrink-0 text-sm text-muted">Needs access</span>
+                    ) : (
+                      <button
+                        onClick={() => connect(c.slug)}
+                        disabled={connecting === c.slug}
+                        className="btn btn-secondary shrink-0 px-4 py-2 text-sm disabled:opacity-50"
+                      >
+                        {connecting === c.slug ? (
+                          <span className="flex items-center gap-2">
+                            <span className="spinner" /> Finish in popup
+                          </span>
+                        ) : (
+                          "Connect"
+                        )}
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </>
           )}
 
           {/* ---------------------------------------------------------- duo */}
@@ -507,7 +526,7 @@ export default function Home() {
 
           <div className="rise mt-10 flex flex-wrap items-center gap-4 border-t border-edge pt-8" style={delay(5)}>
             <button
-              onClick={() => setPhase("create")}
+              onClick={openCreate}
               disabled={connected.length === 0 && contextCount === 0}
               className="btn btn-primary px-7 py-3 disabled:opacity-40"
             >
@@ -583,21 +602,27 @@ export default function Home() {
             disabled={busy}
             className="btn btn-primary mt-8 w-full px-8 py-4 text-lg disabled:opacity-60 sm:w-auto"
           >
-            {busy ? <span className="breathe">Drawing</span> : "Create my comic"}
+            {busy ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="spinner" /> Drawing your comic…
+              </span>
+            ) : (
+              "Create my comic"
+            )}
           </button>
         </div>
 
         {busy && <p className="rise mt-3 text-sm text-muted">About a minute. Keep this tab open.</p>}
 
         {progress.length > 0 && (
-          <ol className="mt-8 divide-y divide-edge border-y border-edge">
+          <ol className="mt-8 divide-y divide-edge border-y border-edge" aria-live="polite">
             {progress.map((line, i) => {
               const current = i === progress.length - 1 && busy;
               return (
                 <li key={i} className="rise flex items-center gap-3 py-3 text-sm">
                   <span
-                    className={`size-1.5 shrink-0 rounded-full ${
-                      current ? "breathe bg-orange" : "bg-line"
+                    className={`shrink-0 ${
+                      current ? "spinner text-orange" : "size-2 rounded-full bg-fg"
                     }`}
                     aria-hidden
                   />
@@ -607,8 +632,6 @@ export default function Home() {
             })}
           </ol>
         )}
-
-        {busy && <DrawingProgress stage={progress.length} />}
 
         {error && <Notice>{error}</Notice>}
 
@@ -727,59 +750,26 @@ function ConnectorLogo({ connector }: { connector: Connector }) {
   );
 }
 
-function ConnectorSkeleton() {
+function ConnectSkeleton() {
   return (
-    <div className="mt-8 grid gap-4 sm:grid-cols-2" aria-hidden>
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="card breathe flex items-start gap-4 p-5" style={delay(i)}>
-          <div className="size-5 rounded bg-line" />
-          <div className="flex-1">
-            <div className="h-4 w-24 rounded bg-line" />
-            <div className="mt-2 h-3 w-full rounded bg-line/70" />
+    <div role="status" aria-label="Loading your sources">
+      <div className="card mt-6 p-5">
+        <div className="skeleton h-4 w-48 rounded" />
+        <div className="skeleton mt-2 h-3 w-3/4 rounded" />
+        <div className="skeleton mt-4 h-24 w-full rounded" />
+      </div>
+      <div className="mt-8 grid gap-4 sm:grid-cols-2" aria-hidden>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="card flex items-start gap-4 p-5" style={delay(i)}>
+            <div className="skeleton size-9 rounded-lg" />
+            <div className="flex-1">
+              <div className="skeleton h-4 w-24 rounded" />
+              <div className="skeleton mt-2 h-3 w-full rounded" />
+            </div>
+            <div className="skeleton h-9 w-20 rounded" />
           </div>
-          <div className="h-8 w-20 rounded-xl bg-line" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * The signature moment. A blank screen would be the weakest
- * part of the product, so the wait becomes the one place the brand colour takes
- * over: an empty page whose panels fill as the pipeline advances, with a light
- * sweeping across whichever panel is being worked on.
- */
-function DrawingProgress({ stage }: { stage: number }) {
-  const panels = ["col-span-2 h-28", "h-20", "h-20", "col-span-2 h-28", "h-20", "h-20"];
-  const filledUpTo = stage * 2;
-
-  return (
-    <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl border border-edge p-2" aria-hidden>
-      {panels.map((shape, i) => {
-        const filled = i < filledUpTo;
-        const working = i >= filledUpTo && i < filledUpTo + 2;
-        return (
-          <div key={i} className={`${shape} relative overflow-hidden rounded-lg bg-page`}>
-            {/*
-             * Panels ink themselves in: a dither sweep on the panel being
-             * worked, a settled dither on the ones already done. The page is
-             * being printed, so it fills the way print fills.
-             */}
-            {(filled || working) && (
-              <div className={`absolute inset-0 ${filled ? "opacity-40" : "opacity-70"}`}>
-                <Dither
-                  pixelSize={2}
-                  shape={working ? "sweep" : "corner"}
-                  progress={working ? 0.55 : 1}
-                  intensity={filled ? 0.8 : 0.6}
-                  animated={working}
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
