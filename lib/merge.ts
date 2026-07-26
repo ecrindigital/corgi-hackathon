@@ -45,6 +45,15 @@ export const CONNECTORS = [
     emoji: "🗺️",
     blurb: "Places and directions (no personal location history)",
   },
+  {
+    slug: "linkedin",
+    label: "LinkedIn",
+    emoji: "💼",
+    // Merge's LinkedIn connector only exposes create_*_share and
+    // validate_credentials — there is no read tool for your posts, profile or
+    // feed, so it contributes nothing to the story. Kept for the share-out path.
+    blurb: "Posting only — LinkedIn exposes no readable history",
+  },
 ] as const;
 
 export type ConnectorSlug = (typeof CONNECTORS)[number]["slug"];
@@ -121,9 +130,20 @@ type JsonSchema = {
   format?: string;
   enum?: unknown[];
   maximum?: number;
+  anyOf?: JsonSchema[];
   properties?: Record<string, JsonSchema>;
   required?: string[];
 };
+
+/** Merge marks every field of an input object `required`, but most accept null. */
+function isNullable(schema: JsonSchema | undefined): boolean {
+  return schema?.anyOf?.some((s) => s.type === "null") ?? false;
+}
+
+function effectiveType(schema: JsonSchema | undefined): string | undefined {
+  if (schema?.type) return schema.type;
+  return schema?.anyOf?.find((s) => s.type && s.type !== "null")?.type;
+}
 
 export type ToolDescriptor = { name: string; inputSchema?: JsonSchema };
 
@@ -153,8 +173,29 @@ function dateValue(schema: JsonSchema | undefined, d: Date): string | number {
   return d.toISOString();
 }
 
+/** Gmail search syntax wants slashes: after:2026/07/19 */
+const slashDate = (d: Date) => isoDate(d).replace(/-/g, "/");
+
+/**
+ * A few fields are only meaningful per connector. Kept deliberately tiny — the
+ * generic rules below handle everything else.
+ */
+const CONNECTOR_HINTS: Record<string, (field: string, opts: DumpOptions) => unknown> = {
+  // `q` takes Gmail search syntax; without it we'd pull the whole mailbox
+  // newest-first instead of the requested window.
+  gmail: (field, opts) => (field === "q" ? `after:${slashDate(opts.since)}` : undefined),
+};
+
 /** A value for a known-safe parameter, or undefined when we refuse to guess. */
-function hintFor(name: string, schema: JsonSchema | undefined, opts: DumpOptions): unknown {
+function hintFor(
+  name: string,
+  schema: JsonSchema | undefined,
+  opts: DumpOptions,
+  connector?: string,
+): unknown {
+  const perConnector = connector ? CONNECTOR_HINTS[connector]?.(name, opts) : undefined;
+  if (perConnector !== undefined) return perConnector;
+
   const n = name.toLowerCase();
   if (LIMIT_KEYS.has(n)) {
     const max = typeof schema?.maximum === "number" ? schema.maximum : opts.pageSize;
@@ -166,6 +207,50 @@ function hintFor(name: string, schema: JsonSchema | undefined, opts: DumpOptions
   if (n === "time_range" && Array.isArray(schema?.enum))
     return schema.enum.includes("short_term") ? "short_term" : schema.enum[0];
   return undefined;
+}
+
+/**
+ * Fill one object schema.
+ *
+ * Merge nests every real parameter inside a single `input` object and lists all
+ * of its fields as required, so a naive reading skips almost every tool. We
+ * recurse into that wrapper, fill what we know, and fall back to null/false for
+ * required fields the schema says are optional in practice.
+ */
+function buildArgs(
+  schema: JsonSchema,
+  opts: DumpOptions,
+  connector: string,
+): { args: Record<string, unknown>; missing: string[] } {
+  const props = schema.properties ?? {};
+  const required = schema.required ?? [];
+  const args: Record<string, unknown> = {};
+  const missing: string[] = [];
+
+  for (const [key, def] of Object.entries(props)) {
+    // The `input` wrapper: recurse and keep the nesting.
+    if (key === "input" && effectiveType(def) === "object" && def.properties) {
+      const inner = buildArgs(def, opts, connector);
+      args.input = inner.args;
+      missing.push(...inner.missing.map((m) => `input.${m}`));
+      continue;
+    }
+
+    const hinted = hintFor(key, def, opts, connector);
+    if (hinted !== undefined) {
+      args[key] = hinted;
+      continue;
+    }
+
+    if (!required.includes(key)) continue;
+
+    // Required but unknown: null and false are safe no-ops the API accepts.
+    if (isNullable(def)) args[key] = null;
+    else if (effectiveType(def) === "boolean") args[key] = false;
+    else missing.push(key);
+  }
+
+  return { args, missing };
 }
 
 export type Plan =
@@ -193,17 +278,7 @@ export function planFor(tool: ToolDescriptor, opts: DumpOptions): Plan {
   if (!READ_VERB.test(bare)) return { kind: "skip", name: tool.name, connector: c, reason: "not a read verb" };
   if (BINARY_TOOL.test(bare)) return { kind: "skip", name: tool.name, connector: c, reason: "binary payload" };
 
-  const schema = tool.inputSchema ?? {};
-  const props: Record<string, JsonSchema> = schema.properties ?? {};
-  const required: string[] = schema.required ?? [];
-
-  const args: Record<string, unknown> = {};
-  for (const [key, def] of Object.entries(props)) {
-    const value = hintFor(key, def, opts);
-    if (value !== undefined) args[key] = value;
-  }
-
-  const missing = required.filter((r) => !(r in args));
+  const { args, missing } = buildArgs(tool.inputSchema ?? {}, opts, c);
   if (missing.length)
     return {
       kind: "skip",
@@ -318,6 +393,194 @@ async function callTool(
   }
 }
 
+// ---------------------------------------------------------------- hydration
+
+/**
+ * List endpoints return identifiers, not content: `gmail__list_messages` gives
+ * back nine bare IDs. Without a second pass the story model receives no actual
+ * emails, so we expand each ID through its detail tool.
+ *
+ * The detail tools are exactly the ones the planner skips as "needs input we
+ * can't infer" — the input is inferable only once the list call has run.
+ */
+const MAX_HYDRATE = 30;
+
+type Expansion = {
+  list: string;
+  detail: string;
+  ids: (json: Record<string, unknown>) => string[];
+  args: (id: string) => Record<string, unknown>;
+  /** Collapse a verbose provider payload into just the storytelling signal. */
+  transform?: (text: string) => string;
+};
+
+// ---- Gmail message extraction ------------------------------------------------
+
+type GmailPart = {
+  mime_type?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+};
+
+const decodeB64Url = (data: string) => {
+  try {
+    return Buffer.from(data, "base64url").toString("utf8");
+  } catch {
+    return "";
+  }
+};
+
+/** Depth-first search for the first part of a given MIME type that carries data. */
+function findPart(part: GmailPart | undefined, mime: string): string | undefined {
+  if (!part) return undefined;
+  if (part.mime_type === mime && part.body?.data) return decodeB64Url(part.body.data);
+  for (const child of part.parts ?? []) {
+    const hit = findPart(child, mime);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#?\w+;/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** How much body text per email is worth keeping. Enough for a joke, not a newsletter. */
+const BODY_CHARS = 1200;
+
+/**
+ * One raw Gmail message is ~33k characters, nearly all of it MIME scaffolding,
+ * a base64 HTML part and a duplicate `raw` field. The story model needs six
+ * fields. This keeps those and drops the rest, which is what makes it possible
+ * to hydrate dozens of emails instead of a handful.
+ */
+function summariseGmailMessage(text: string): string {
+  let json: {
+    snippet?: string;
+    internal_date?: string;
+    label_ids?: string[];
+    payload?: GmailPart & { headers?: { name: string; value: string }[] };
+  };
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return text;
+  }
+
+  const headers = json.payload?.headers ?? [];
+  const header = (name: string) =>
+    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+  const plain = findPart(json.payload, "text/plain");
+  const html = plain ? undefined : findPart(json.payload, "text/html");
+  const body = (plain ?? (html ? stripHtml(html) : "") ?? "").trim();
+
+  const date = json.internal_date
+    ? new Date(Number(json.internal_date)).toISOString()
+    : header("Date");
+
+  return JSON.stringify(
+    {
+      from: header("From"),
+      to: header("To"),
+      subject: header("Subject"),
+      date,
+      labels: (json.label_ids ?? []).filter((l) => !l.startsWith("Label_")),
+      snippet: json.snippet,
+      body: body.slice(0, BODY_CHARS) + (body.length > BODY_CHARS ? " […]" : ""),
+    },
+    null,
+    1,
+  );
+}
+
+const idsFrom = (json: Record<string, unknown>, key: string): string[] => {
+  const rows = json[key];
+  if (!Array.isArray(rows)) return [];
+  return rows.map((r) => (r as { id?: string })?.id).filter((id): id is string => Boolean(id));
+};
+
+const EXPANSIONS: Expansion[] = [
+  {
+    list: "gmail__list_messages",
+    detail: "gmail__get_message",
+    ids: (j) => idsFrom(j, "messages"),
+    // 'full' is the only format carrying the body; summariseGmailMessage then
+    // throws away the 95% of it that is MIME scaffolding.
+    args: (id) => ({ input: { message_id: id, format: "full" } }),
+    transform: summariseGmailMessage,
+  },
+];
+
+async function hydrate(
+  client: Client,
+  results: ToolResult[],
+  available: Set<string>,
+  opts: DumpOptions,
+  onProgress?: (done: number, total: number, result: ToolResult) => void,
+): Promise<ToolResult[]> {
+  const jobs: {
+    name: string;
+    connector: string;
+    args: Record<string, unknown>;
+    transform?: (text: string) => string;
+  }[] = [];
+
+  for (const exp of EXPANSIONS) {
+    if (!available.has(exp.detail)) continue;
+    const source = results.find((r) => r.name === exp.list && r.status === "ok");
+    if (!source) continue;
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(source.text);
+    } catch {
+      continue;
+    }
+
+    const connector = exp.detail.split("__")[0] ?? "unknown";
+    for (const id of exp.ids(parsed).slice(0, MAX_HYDRATE)) {
+      jobs.push({
+        name: `${exp.detail}[${id}]`,
+        connector,
+        args: exp.args(id),
+        transform: exp.transform,
+      });
+    }
+  }
+
+  if (!jobs.length) return [];
+
+  // Truncation happens inside callTool, before our transform runs — a clipped
+  // payload would fail to parse. Take these whole; the transform shrinks them.
+  const rawOpts: DumpOptions = { ...opts, maxChars: 1_000_000 };
+
+  let done = 0;
+  return pool(jobs, opts.concurrency, async (job) => {
+    const r = await callTool(
+      client,
+      { kind: "call", name: job.name.replace(/\[.*\]$/, ""), connector: job.connector, args: job.args },
+      rawOpts,
+    );
+    const text = job.transform && r.status === "ok" ? job.transform(r.text) : r.text;
+    const labelled = { ...r, name: job.name, text, truncated: false };
+    onProgress?.(++done, jobs.length, labelled);
+    return labelled;
+  });
+}
+
 export type DumpReport = {
   toolCount: number;
   results: ToolResult[];
@@ -346,9 +609,12 @@ export async function runDump(
       return r;
     });
 
+    const available = new Set(tools.map((t) => t.name));
+    const hydrated = await hydrate(client, results, available, opts, onProgress);
+
     return {
       toolCount: tools.length,
-      results,
+      results: [...results, ...hydrated],
       skipped: skips.map((s) => ({ tool: s.name, reason: s.reason })),
       unauthenticated: skips.filter((s) => s.needsAuth).map((s) => s.needsAuth!),
       options: { windowDays: opts.windowDays, since: opts.since.toISOString(), now: opts.now.toISOString() },

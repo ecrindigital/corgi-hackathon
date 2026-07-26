@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "setup": "bun run scripts/merge-setup.ts",
-    "dump": "bun run scripts/dump-context.ts"
+    "dump": "bun run scripts/dump-context.ts",
+    "comic": "bun run scripts/generate-comic.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
