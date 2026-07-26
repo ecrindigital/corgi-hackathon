@@ -116,6 +116,18 @@ export async function createRegisteredUser(originUserId: string): Promise<string
  * across restarts. That is what makes shared rooms possible without persistence.
  */
 export async function ensureRegisteredUser(originUserId: string, name?: string): Promise<string> {
+  const lookup = new URL(`${API_BASE}/api/v1/registered-users/`);
+  lookup.searchParams.set("origin_user_id", originUserId);
+  lookup.searchParams.set("page_size", "1");
+  const existing = await fetch(lookup, {
+    headers: { Authorization: `Bearer ${API_KEY()}` },
+    cache: "no-store",
+  });
+  if (!existing.ok)
+    throw new Error(`${existing.status} ${existing.statusText} — ${(await existing.text()).slice(0, 300)}`);
+  const match = ((await existing.json()) as { results?: RegisteredUserInfo[] }).results?.[0];
+  if (match?.id) return match.id;
+
   try {
     const json = await post("/api/v1/registered-users", {
       origin_user_id: originUserId,
@@ -847,41 +859,40 @@ export async function runDump(
 /**
  * Every connector in the Tool Pack, and whether it is live for this user.
  *
- * A connector that still shows `authenticate_<slug>` has no credential yet; one
- * whose real `<slug>__*` tools are exposed is connected. Reading it from the
- * pack means the dashboard is the single source of truth.
+ * The Tool Pack catalog is a cheap REST read. Authentication state comes from
+ * the Registered User REST endpoint, so rendering and OAuth polling do not
+ * repeatedly open rate-limited MCP sessions.
  */
 export async function connectorStatus(registeredUserId: string): Promise<ConnectorStatus[]> {
-  return withMcp(registeredUserId, async (client) => {
-    const { tools } = await client.listTools();
-    const pending = new Set<string>();
-    const ready = new Map<string, number>();
+  const [res, user] = await Promise.all([
+    fetch(`${API_BASE}/api/v1/tool-packs/${TOOL_PACK_ID()}/connectors/`, {
+      headers: { Authorization: `Bearer ${API_KEY()}` },
+      cache: "no-store",
+    }),
+    getRegisteredUser(registeredUserId),
+  ]);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${(await res.text()).slice(0, 300)}`);
 
-    for (const tool of tools) {
-      const auth = NEEDS_AUTH.exec(tool.name);
-      if (auth) {
-        pending.add(auth[1]!);
-        continue;
-      }
-      const prefix = tool.name.split("__")[0];
-      if (prefix && tool.name.includes("__")) ready.set(prefix, (ready.get(prefix) ?? 0) + 1);
-    }
+  const connected = new Set(user?.authenticated_connectors ?? []);
+  const connectors = (await res.json()) as {
+    slug: string;
+    name?: string;
+    tools?: unknown[];
+  }[];
 
-    const slugs = [...new Set([...ready.keys(), ...pending])].filter((s) => !HIDDEN_CONNECTORS.has(s));
-
-    return slugs
-      .map((slug) => {
-        const meta = CONNECTOR_META[slug];
-        return {
-          slug,
-          label: meta?.label ?? prettify(slug),
-          emoji: meta?.emoji ?? "🔌",
-          blurb: meta?.blurb ?? "",
-          connected: ready.has(slug),
-          toolCount: ready.get(slug) ?? 0,
-          inPack: true,
-        };
-      })
-      .sort((a, b) => Number(b.connected) - Number(a.connected) || a.label.localeCompare(b.label));
-  });
+  return connectors
+    .filter(({ slug }) => !HIDDEN_CONNECTORS.has(slug))
+    .map(({ slug, name, tools }) => {
+      const meta = CONNECTOR_META[slug];
+      return {
+        slug,
+        label: meta?.label ?? name ?? prettify(slug),
+        emoji: meta?.emoji ?? "🔌",
+        blurb: meta?.blurb ?? "",
+        connected: connected.has(slug),
+        toolCount: tools?.length ?? 0,
+        inPack: true,
+      };
+    })
+    .sort((a, b) => Number(b.connected) - Number(a.connected) || a.label.localeCompare(b.label));
 }

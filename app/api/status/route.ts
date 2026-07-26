@@ -12,9 +12,8 @@ export async function GET(request: Request) {
     const userId = await registeredUserFor(room);
     const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(new URL(request.url).hostname);
 
-    // Connector list comes from the Tool Pack via MCP; the other participant's
-    // state is a cheap REST read, so we don't open a second MCP session.
-    const [connectors, people] = await Promise.all([connectorStatus(userId), participants(room)]);
+    // Status is REST-only; MCP is reserved for fetching story context.
+    const [connectors, people] = await Promise.all([connectorStatus(userId), participants(room, userId)]);
 
     // iMessage is not a Merge connector: it is read straight off this machine,
     // so it is injected here rather than discovered in the Tool Pack.

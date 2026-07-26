@@ -87,6 +87,7 @@ export default function Home() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? res.statusText);
       setStatus(json);
+      setError(null);
       return json as Status;
     } catch (err) {
       setError((err as Error).message);

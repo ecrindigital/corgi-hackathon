@@ -90,10 +90,13 @@ export async function currentRegisteredUserId(): Promise<string> {
  * Slot B's user is only created once someone joins, so an unresolvable or
  * empty slot B simply means "still solo".
  */
-export async function participants(room: Room): Promise<Participant[]> {
+export async function participants(room: Room, currentUserId?: string): Promise<Participant[]> {
   const found = await Promise.all(
     SLOTS.map(async (slot) => {
-      const userId = await registeredUserFor({ code: room.code, slot }).catch(() => null);
+      const userId =
+        slot === room.slot && currentUserId
+          ? currentUserId
+          : await registeredUserFor({ code: room.code, slot }).catch(() => null);
       if (!userId) return null;
       const [info, context] = await Promise.all([
         getRegisteredUser(userId),
