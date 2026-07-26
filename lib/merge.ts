@@ -25,38 +25,61 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/** The connectors this POC surfaces, in display order. */
-export const CONNECTORS = [
-  {
-    slug: "gmail",
+/**
+ * Presentation only. The list of connectors is read from the Tool Pack at
+ * runtime — adding one in the Merge dashboard makes it appear in the app with
+ * no code change. This just gives the ones we know a nicer face.
+ */
+const CONNECTOR_META: Record<string, { label: string; emoji: string; blurb: string }> = {
+  gmail: {
     label: "Gmail",
     emoji: "✉️",
     blurb: "Conversations, invitations, travel confirmations, unexpected life events",
   },
-  {
-    slug: "google_drive",
-    label: "Google Drive",
-    emoji: "📁",
-    blurb: "Files you touched, and anything you kept",
+  google_calendar: {
+    label: "Google Calendar",
+    emoji: "📅",
+    blurb: "Where you were, with whom, and what it was called",
   },
-  {
-    slug: "google_maps",
+  google_drive: { label: "Google Drive", emoji: "📁", blurb: "Files you touched, and what you kept" },
+  google_maps: {
     label: "Google Maps",
     emoji: "🗺️",
     blurb: "Places and directions (no personal location history)",
   },
-  {
-    slug: "linkedin",
+  x: { label: "X", emoji: "🐦", blurb: "What you posted, liked and bookmarked" },
+  spotify: { label: "Spotify", emoji: "🎧", blurb: "The soundtrack of your week" },
+  oura: { label: "Oura", emoji: "💍", blurb: "Sleep, readiness, and comedic contrast" },
+  whoop: { label: "WHOOP", emoji: "⌚", blurb: "Workouts, strain and recovery" },
+  notion: { label: "Notion", emoji: "📓", blurb: "Thoughts and half-finished plans" },
+  github: { label: "GitHub", emoji: "🐙", blurb: "What you built and what you broke" },
+  linkedin: {
     label: "LinkedIn",
     emoji: "💼",
     // Merge's LinkedIn connector only exposes create_*_share and
-    // validate_credentials — there is no read tool for your posts, profile or
-    // feed, so it contributes nothing to the story. Kept for the share-out path.
+    // validate_credentials — no read tool for posts, profile or feed, so it
+    // contributes nothing to the story. Kept for the share-out path.
     blurb: "Posting only — LinkedIn exposes no readable history",
   },
-] as const;
+};
 
-export type ConnectorSlug = (typeof CONNECTORS)[number]["slug"];
+/** google_drive -> "Google Drive", x -> "X" */
+function prettify(slug: string): string {
+  return slug
+    .split("_")
+    .map((word) => (word.length <= 2 ? word.toUpperCase() : word[0]!.toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
+export type ConnectorStatus = {
+  slug: string;
+  label: string;
+  emoji: string;
+  blurb: string;
+  connected: boolean;
+  toolCount: number;
+  inPack: boolean;
+};
 
 // --------------------------------------------------------------- REST calls
 
@@ -145,7 +168,23 @@ function effectiveType(schema: JsonSchema | undefined): string | undefined {
   return schema?.anyOf?.find((s) => s.type && s.type !== "null")?.type;
 }
 
-export type ToolDescriptor = { name: string; inputSchema?: JsonSchema };
+/**
+ * Merge ships MCP annotations on almost every tool. They are authoritative —
+ * the dashboard renders the same flags as "Read only" / "Destructive" — so we
+ * trust them over any guess made from the tool's name.
+ */
+type ToolAnnotations = {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+};
+
+export type ToolDescriptor = {
+  name: string;
+  inputSchema?: JsonSchema;
+  annotations?: ToolAnnotations | null;
+};
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -186,13 +225,23 @@ const CONNECTOR_HINTS: Record<string, (field: string, opts: DumpOptions) => unkn
   gmail: (field, opts) => (field === "q" ? `after:${slashDate(opts.since)}` : undefined),
 };
 
+/** `user_id`, `userId` and `USER_ID` are the same parameter. */
+const normKey = (s: string) => s.toLowerCase().replace(/_/g, "");
+
 /** A value for a known-safe parameter, or undefined when we refuse to guess. */
 function hintFor(
   name: string,
   schema: JsonSchema | undefined,
   opts: DumpOptions,
   connector?: string,
+  discovered?: Record<string, string>,
 ): unknown {
+  // Values learned from an earlier call on this connector (see DISCOVERIES).
+  if (discovered) {
+    const hit = Object.entries(discovered).find(([k]) => normKey(k) === normKey(name));
+    if (hit) return hit[1];
+  }
+
   const perConnector = connector ? CONNECTOR_HINTS[connector]?.(name, opts) : undefined;
   if (perConnector !== undefined) return perConnector;
 
@@ -221,6 +270,7 @@ function buildArgs(
   schema: JsonSchema,
   opts: DumpOptions,
   connector: string,
+  discovered?: Record<string, string>,
 ): { args: Record<string, unknown>; missing: string[] } {
   const props = schema.properties ?? {};
   const required = schema.required ?? [];
@@ -230,13 +280,13 @@ function buildArgs(
   for (const [key, def] of Object.entries(props)) {
     // The `input` wrapper: recurse and keep the nesting.
     if (key === "input" && effectiveType(def) === "object" && def.properties) {
-      const inner = buildArgs(def, opts, connector);
+      const inner = buildArgs(def, opts, connector, discovered);
       args.input = inner.args;
       missing.push(...inner.missing.map((m) => `input.${m}`));
       continue;
     }
 
-    const hinted = hintFor(key, def, opts, connector);
+    const hinted = hintFor(key, def, opts, connector, discovered);
     if (hinted !== undefined) {
       args[key] = hinted;
       continue;
@@ -257,7 +307,11 @@ export type Plan =
   | { kind: "call"; name: string; connector: string; args: Record<string, unknown> }
   | { kind: "skip"; name: string; connector: string; reason: string; needsAuth?: string };
 
-export function planFor(tool: ToolDescriptor, opts: DumpOptions): Plan {
+export function planFor(
+  tool: ToolDescriptor,
+  opts: DumpOptions,
+  discovered?: Record<string, Record<string, string>>,
+): Plan {
   const auth = NEEDS_AUTH.exec(tool.name);
   if (auth)
     return {
@@ -274,11 +328,31 @@ export function planFor(tool: ToolDescriptor, opts: DumpOptions): Plan {
 
   if (opts.connectors?.length && !opts.connectors.includes(c))
     return { kind: "skip", name: tool.name, connector: c, reason: "connector filtered out" };
-  if (WRITE_VERB.test(bare)) return { kind: "skip", name: tool.name, connector: c, reason: "mutating tool" };
-  if (!READ_VERB.test(bare)) return { kind: "skip", name: tool.name, connector: c, reason: "not a read verb" };
+
+  // Annotations win when present: they catch read tools whose names we'd never
+  // guess (ZoomInfo's `enrich_*`) and mutations our verb list would miss.
+  const ann = tool.annotations;
+  if (ann?.destructiveHint === true)
+    return { kind: "skip", name: tool.name, connector: c, reason: "destructive tool" };
+  if (ann?.readOnlyHint === false)
+    return { kind: "skip", name: tool.name, connector: c, reason: "mutating tool" };
+
+  if (ann?.readOnlyHint !== true) {
+    // No annotation — fall back to reading the name.
+    if (WRITE_VERB.test(bare)) return { kind: "skip", name: tool.name, connector: c, reason: "mutating tool" };
+    if (!READ_VERB.test(bare))
+      return { kind: "skip", name: tool.name, connector: c, reason: "not a read verb" };
+  }
+
+  // Read-only but megabytes of base64 — useless to a story model either way.
   if (BINARY_TOOL.test(bare)) return { kind: "skip", name: tool.name, connector: c, reason: "binary payload" };
 
-  const { args, missing } = buildArgs(tool.inputSchema ?? {}, opts, c);
+  // Read-only plumbing: credential checks, quota counters, API versions. Real
+  // calls, zero story value — they'd just dilute the context.
+  if (/^(validate|ping|health|get_usage|get_api_version|get_enums)/.test(bare))
+    return { kind: "skip", name: tool.name, connector: c, reason: "diagnostic tool, no story value" };
+
+  const { args, missing } = buildArgs(tool.inputSchema ?? {}, opts, c, discovered?.[c]);
   if (missing.length)
     return {
       kind: "skip",
@@ -524,6 +598,41 @@ const EXPANSIONS: Expansion[] = [
   },
 ];
 
+/**
+ * Some connectors gate their personal reads behind "who am I?". X exposes
+ * `get_me`, and only once you hold that user ID can you call get_user_tweets,
+ * get_liked_tweets or get_user_mentions — the tools that actually carry the
+ * person's voice. We run the identity call in the first pass, harvest the ID,
+ * then re-plan everything the planner had given up on.
+ */
+const DISCOVERIES: { tool: string; extract: (json: Record<string, unknown>) => Record<string, string> }[] = [
+  {
+    tool: "x__get_me",
+    extract: (j) => {
+      const data = (j.data ?? j) as { id?: string | number; username?: string };
+      const out: Record<string, string> = {};
+      if (data?.id !== undefined) out.user_id = String(data.id);
+      if (data?.username) out.username = data.username;
+      return out;
+    },
+  },
+];
+
+function collectDiscoveries(results: ToolResult[]): Record<string, Record<string, string>> {
+  const found: Record<string, Record<string, string>> = {};
+  for (const d of DISCOVERIES) {
+    const source = results.find((r) => r.name === d.tool && r.status === "ok");
+    if (!source) continue;
+    try {
+      const connector = d.tool.split("__")[0] ?? "unknown";
+      found[connector] = { ...(found[connector] ?? {}), ...d.extract(JSON.parse(source.text)) };
+    } catch {
+      // unparseable payload — nothing to learn
+    }
+  }
+  return found;
+}
+
 async function hydrate(
   client: Client,
   results: ToolResult[],
@@ -609,21 +718,48 @@ export async function runDump(
       return r;
     });
 
+    // Second planning pass: identity learned in the first pass can unlock tools
+    // that were skipped for a missing id.
+    const discovered = collectDiscoveries(results);
+    const called = new Set(calls.map((p) => p.name));
+    const unlocked = Object.keys(discovered).length
+      ? tools
+          .map((t) => planFor(t as ToolDescriptor, opts, discovered))
+          .filter((p): p is Extract<Plan, { kind: "call" }> => p.kind === "call" && !called.has(p.name))
+      : [];
+
+    const unlockedResults = unlocked.length
+      ? await pool(unlocked, opts.concurrency, async (plan) => {
+          const r = await callTool(client, plan, opts);
+          onProgress?.(++done, calls.length + unlocked.length, r);
+          return r;
+        })
+      : [];
+
     const available = new Set(tools.map((t) => t.name));
-    const hydrated = await hydrate(client, results, available, opts, onProgress);
+    const all = [...results, ...unlockedResults];
+    const hydrated = await hydrate(client, all, available, opts, onProgress);
 
     return {
       toolCount: tools.length,
-      results: [...results, ...hydrated],
-      skipped: skips.map((s) => ({ tool: s.name, reason: s.reason })),
+      results: [...all, ...hydrated],
+      skipped: skips
+        .filter((s) => !unlocked.some((u) => u.name === s.name))
+        .map((s) => ({ tool: s.name, reason: s.reason })),
       unauthenticated: skips.filter((s) => s.needsAuth).map((s) => s.needsAuth!),
       options: { windowDays: opts.windowDays, since: opts.since.toISOString(), now: opts.now.toISOString() },
     };
   });
 }
 
-/** Which connectors are connected, judged by whether their real tools are exposed. */
-export async function connectorStatus(registeredUserId: string) {
+/**
+ * Every connector in the Tool Pack, and whether it is live for this user.
+ *
+ * A connector that still shows `authenticate_<slug>` has no credential yet; one
+ * whose real `<slug>__*` tools are exposed is connected. Reading it from the
+ * pack means the dashboard is the single source of truth.
+ */
+export async function connectorStatus(registeredUserId: string): Promise<ConnectorStatus[]> {
   return withMcp(registeredUserId, async (client) => {
     const { tools } = await client.listTools();
     const pending = new Set<string>();
@@ -639,11 +775,21 @@ export async function connectorStatus(registeredUserId: string) {
       if (prefix && tool.name.includes("__")) ready.set(prefix, (ready.get(prefix) ?? 0) + 1);
     }
 
-    return CONNECTORS.map((c) => ({
-      ...c,
-      connected: ready.has(c.slug),
-      toolCount: ready.get(c.slug) ?? 0,
-      inPack: ready.has(c.slug) || pending.has(c.slug),
-    }));
+    const slugs = [...new Set([...ready.keys(), ...pending])];
+
+    return slugs
+      .map((slug) => {
+        const meta = CONNECTOR_META[slug];
+        return {
+          slug,
+          label: meta?.label ?? prettify(slug),
+          emoji: meta?.emoji ?? "🔌",
+          blurb: meta?.blurb ?? "",
+          connected: ready.has(slug),
+          toolCount: ready.get(slug) ?? 0,
+          inPack: true,
+        };
+      })
+      .sort((a, b) => Number(b.connected) - Number(a.connected) || a.label.localeCompare(b.label));
   });
 }
